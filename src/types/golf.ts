@@ -67,11 +67,27 @@ export interface HoleScore {
   notes?: string;
 }
 
+export interface GpsPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface HoleGps {
+  tee?: GpsPoint;
+  greenCenter?: GpsPoint;
+  greenFront?: GpsPoint;
+  greenBack?: GpsPoint;
+  fairwayCenter?: GpsPoint;
+  hazards?: { type: 'bunker' | 'water' | 'trees'; position: GpsPoint; label?: string }[];
+  polygon?: GpsPoint[];  // hole outline (fairway shape)
+}
+
 export interface CourseHole {
   holeNumber: number;
   par: number;
   yardage?: number;
   handicapIndex?: number;
+  gps?: HoleGps;
 }
 
 export interface CourseTee {
@@ -86,6 +102,7 @@ export interface Course {
   name: string;
   city?: string;
   state?: string;
+  location?: GpsPoint;
   tees: CourseTee[];
 }
 
