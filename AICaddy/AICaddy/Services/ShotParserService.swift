@@ -101,12 +101,12 @@ final class ShotParserService {
         if let shotsArr = json["shots"] as? [[String: Any]] {
             for (i, s) in shotsArr.enumerated() {
                 let club = (s["club"] as? String).flatMap { Club(rawValue: $0) }
-                let result = (s["result"] as? String).flatMap { ShotResult(rawValue: $0) }
+                let shotResult = (s["result"] as? String).flatMap { ShotResult(rawValue: $0) }
                 let shot = Shot(
                     shotNumber: s["shotNumber"] as? Int ?? currentShotNumber + i,
                     club: club,
                     distanceYards: s["distanceYards"] as? Int,
-                    result: result,
+                    result: shotResult,
                     isPenalty: s["isPenalty"] as? Bool ?? false,
                     isPutt: s["isPutt"] as? Bool ?? false
                 )
