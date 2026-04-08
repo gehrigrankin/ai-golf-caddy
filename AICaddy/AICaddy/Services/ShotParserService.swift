@@ -119,32 +119,69 @@ final class ShotParserService {
 
     // MARK: - Local Parser
 
+    // Expanded aliases — speech recognition often returns number words, plurals, etc.
     private static let clubAliases: [(String, Club)] = [
-        ("driver", .driver),
+        // Driver
+        ("driver", .driver), ("drive", .driver), ("big dog", .driver), ("big stick", .driver),
+        // Woods
         ("3 wood", .wood3), ("3wood", .wood3), ("three wood", .wood3),
         ("5 wood", .wood5), ("5wood", .wood5), ("five wood", .wood5),
-        ("7 wood", .wood7), ("7wood", .wood7),
-        ("2 hybrid", .hybrid2), ("3 hybrid", .hybrid3),
-        ("4 hybrid", .hybrid4), ("5 hybrid", .hybrid5),
-        ("2 iron", .iron2), ("3 iron", .iron3), ("4 iron", .iron4),
-        ("5 iron", .iron5), ("6 iron", .iron6), ("7 iron", .iron7),
-        ("8 iron", .iron8), ("9 iron", .iron9),
-        ("pitching wedge", .pw), ("pw", .pw),
-        ("gap wedge", .gw), ("gw", .gw),
-        ("sand wedge", .sw), ("sw", .sw),
-        ("lob wedge", .lw), ("lw", .lw),
-        ("putter", .putter), ("putt", .putter),
+        ("7 wood", .wood7), ("7wood", .wood7), ("seven wood", .wood7),
+        // Hybrids
+        ("2 hybrid", .hybrid2), ("two hybrid", .hybrid2),
+        ("3 hybrid", .hybrid3), ("three hybrid", .hybrid3),
+        ("4 hybrid", .hybrid4), ("four hybrid", .hybrid4), ("hybrid", .hybrid4),
+        ("5 hybrid", .hybrid5), ("five hybrid", .hybrid5),
+        // Irons — include "iron" and just the number patterns
+        ("2 iron", .iron2), ("two iron", .iron2),
+        ("3 iron", .iron3), ("three iron", .iron3),
+        ("4 iron", .iron4), ("four iron", .iron4),
+        ("5 iron", .iron5), ("five iron", .iron5),
+        ("6 iron", .iron6), ("six iron", .iron6),
+        ("7 iron", .iron7), ("seven iron", .iron7),
+        ("8 iron", .iron8), ("eight iron", .iron8),
+        ("9 iron", .iron9), ("nine iron", .iron9),
+        // Wedges — common spoken forms
+        ("pitching wedge", .pw), ("pitch", .pw), ("pw", .pw), ("p w", .pw),
+        ("gap wedge", .gw), ("gw", .gw), ("g w", .gw), ("52", .gw), ("52 degree", .gw),
+        ("sand wedge", .sw), ("sw", .sw), ("s w", .sw), ("56", .sw), ("56 degree", .sw),
+        ("lob wedge", .lw), ("lw", .lw), ("l w", .lw), ("lob", .lw), ("60", .lw), ("60 degree", .lw),
+        // Putter
+        ("putter", .putter), ("putt", .putter), ("putted", .putter), ("putting", .putter),
     ]
 
     private static let resultAliases: [(String, ShotResult)] = [
-        ("fairway", .fairway), ("in the fairway", .fairway),
-        ("rough", .rough), ("deep rough", .deepRough),
-        ("bunker", .bunker), ("sand", .bunker), ("trap", .bunker),
-        ("water", .water), ("hazard", .water),
-        ("ob", .ob), ("out of bounds", .ob),
-        ("green", .green), ("on the green", .green), ("on green", .green), ("pin high", .green),
-        ("fringe", .fringe), ("trees", .trees),
-        ("holed", .holed), ("hole in one", .holed),
+        // Fairway
+        ("fairway", .fairway), ("in the fairway", .fairway), ("hit fairway", .fairway),
+        ("found the fairway", .fairway), ("middle of the fairway", .fairway), ("split the fairway", .fairway),
+        // Rough
+        ("rough", .rough), ("in the rough", .rough), ("left rough", .rough), ("right rough", .rough),
+        ("first cut", .rough), ("light rough", .rough),
+        ("deep rough", .deepRough), ("thick rough", .deepRough), ("heavy rough", .deepRough),
+        // Bunker
+        ("bunker", .bunker), ("sand", .bunker), ("trap", .bunker), ("sand trap", .bunker),
+        ("greenside bunker", .bunker), ("fairway bunker", .bunker), ("in the sand", .bunker),
+        ("beach", .bunker),
+        // Water
+        ("water", .water), ("hazard", .water), ("in the water", .water), ("wet", .water),
+        ("lake", .water), ("pond", .water), ("creek", .water),
+        // OB
+        ("ob", .ob), ("out of bounds", .ob), ("o.b.", .ob), ("o b", .ob),
+        // Green
+        ("green", .green), ("on the green", .green), ("on green", .green),
+        ("pin high", .green), ("hit the green", .green), ("found the green", .green),
+        ("on the dance floor", .green), ("gir", .green),
+        // Fringe
+        ("fringe", .fringe), ("on the fringe", .fringe), ("just off the green", .fringe),
+        ("collar", .fringe), ("apron", .fringe),
+        // Trees
+        ("trees", .trees), ("in the trees", .trees), ("woods", .trees),
+        // Recovery
+        ("recovery", .recovery), ("punch", .recovery), ("punch out", .recovery),
+        ("chip out", .recovery),
+        // Holed
+        ("holed", .holed), ("hole in one", .holed), ("holed out", .holed),
+        ("jarred it", .holed), ("drained it", .holed),
     ]
 
     func localParse(input: String, par: Int, currentShotNumber: Int) -> ParsedShotInput {
@@ -159,18 +196,47 @@ final class ShotParserService {
             return result
         }
 
-        // Putts only: "2 putts"
-        if let match = lower.range(of: #"(\d)\s*putts?"#, options: .regularExpression),
-           lower.count < 15 {
-            let digit = lower[match].first { $0.isNumber }
-            if let d = digit { result.putts = Int(String(d)) }
+        // Putts only: "2 putts", "one putt", "3 putt"
+        if let match = lower.range(of: #"(\d|one|two|three|four)\s*putts?"#, options: .regularExpression),
+           lower.count < 20 {
+            let puttStr = String(lower[match])
+            result.putts = parseNumberWord(puttStr)
             result.confidence = 0.9
             return result
         }
 
-        // Parse individual shots
+        // "chip and a putt" / "up and down" patterns
+        if lower.contains("chip and a putt") || lower.contains("chip and putt") ||
+           lower.contains("up and down") || lower.contains("up-and-down") {
+            var chip = Shot(shotNumber: currentShotNumber, isPutt: false)
+            chip.result = .green
+            var putt = Shot(shotNumber: currentShotNumber + 1, club: .putter, isPutt: true)
+            putt.result = .holed
+            result.shots = [chip, putt]
+            result.putts = 1
+            result.confidence = 0.85
+            return result
+        }
+
+        // "chip and 2 putts" pattern
+        if let match = lower.range(of: #"chip.*?(\d|one|two|three)\s*putts?"#, options: .regularExpression) {
+            let matchStr = String(lower[match])
+            let puttCount = parseNumberWord(matchStr) ?? 2
+            var chip = Shot(shotNumber: currentShotNumber, isPutt: false)
+            chip.result = .green
+            result.shots = [chip]
+            for i in 0..<puttCount {
+                result.shots.append(Shot(shotNumber: currentShotNumber + 1 + i, club: .putter, isPutt: true))
+            }
+            result.putts = puttCount
+            result.confidence = 0.85
+            return result
+        }
+
+        // Parse individual shots from comma/semicolon/then-separated segments
         let segments = lower.components(separatedBy: CharacterSet(charactersIn: ",;"))
             .flatMap { $0.components(separatedBy: " then ") }
+            .flatMap { $0.components(separatedBy: " and ") }
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
 
@@ -182,11 +248,37 @@ final class ShotParserService {
             }
         }
 
+        // Fairway detection
         if lower.contains("fairway") { result.fairwayHit = true }
-        if lower.contains("missed fairway") || lower.contains("miss fairway") { result.fairwayHit = false }
+        if lower.contains("missed fairway") || lower.contains("miss fairway") ||
+           lower.contains("missed the fairway") { result.fairwayHit = false }
+
+        // GIR detection
+        if lower.contains("gir") || lower.contains("green in regulation") ||
+           lower.contains("green in reg") { result.greenInRegulation = true }
+        if lower.contains("missed the green") || lower.contains("missed green") { result.greenInRegulation = false }
+
+        // Also extract putts mentioned anywhere in the input
+        if result.putts == nil {
+            if let match = lower.range(of: #"(\d|one|two|three|four)\s*putts?"#, options: .regularExpression) {
+                result.putts = parseNumberWord(String(lower[match]))
+            }
+        }
 
         result.confidence = result.shots.isEmpty ? 0.4 : 0.7
         return result
+    }
+
+    /// Parse number words that speech recognition might return
+    private func parseNumberWord(_ s: String) -> Int? {
+        if s.contains("one") || s.contains("1") { return 1 }
+        if s.contains("two") || s.contains("2") { return 2 }
+        if s.contains("three") || s.contains("3") { return 3 }
+        if s.contains("four") || s.contains("4") { return 4 }
+        if s.contains("five") || s.contains("5") { return 5 }
+        // Try extracting first digit
+        if let digit = s.first(where: \.isNumber) { return Int(String(digit)) }
+        return nil
     }
 
     private func parseShotSegment(_ seg: String, shotNumber: Int) -> Shot? {

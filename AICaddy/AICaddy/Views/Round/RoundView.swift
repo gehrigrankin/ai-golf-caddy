@@ -9,8 +9,10 @@ struct RoundView: View {
     let speechService: SpeechService
     let shotParser: ShotParserService
     let courseSearch: CourseSearchService
+    let clubRecommender: ClubRecommendationService
 
     @Query(sort: \Course.createdAt, order: .reverse) private var savedCourses: [Course]
+    @Query(filter: #Predicate<Round> { $0.isComplete }, sort: \Round.date) private var completedRounds: [Round]
 
     @State private var phase: Phase = .search
     @State private var round: Round?
@@ -100,7 +102,8 @@ struct RoundView: View {
                                     isFirst: currentHole == 1,
                                     isLast: currentHole == 18,
                                     speech: speechService,
-                                    shotParser: shotParser
+                                    shotParser: shotParser,
+                                    clubRecommendation: currentClubRecommendation
                                 )
                             }
 
@@ -179,6 +182,7 @@ struct RoundView: View {
         .onAppear {
             locationService.startTracking()
             speechService.requestAuthorization()
+            clubRecommender.loadHistory(rounds: completedRounds)
         }
         .onDisappear {
             locationService.stopTracking()
@@ -210,6 +214,17 @@ struct RoundView: View {
 
     private var currentHoleGps: HoleGps? {
         activeCourse?.tees.first?.holes.first { $0.holeNumber == currentHole }?.gps
+    }
+
+    /// Club recommendation based on GPS distance to green center
+    private var currentClubRecommendation: ClubRecommendation? {
+        guard let loc = locationService.location,
+              let greenCenter = currentHoleGps?.greenCenter
+        else { return nil }
+        let dist = LocationService.distanceYards(from: loc, to: greenCenter.coordinate)
+        // Only recommend for approach shots (not on the green, not teeing off on par 4/5)
+        guard dist > 30 && dist < 300 else { return nil }
+        return clubRecommender.recommend(distanceYards: dist)
     }
 
     // MARK: - Actions

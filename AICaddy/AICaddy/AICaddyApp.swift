@@ -5,6 +5,7 @@ import SwiftData
 struct AICaddyApp: App {
     @State private var locationService = LocationService()
     @State private var speechService = SpeechService()
+    @State private var clubRecommender = ClubRecommendationService()
 
     private let shotParser = ShotParserService()
     private let courseSearch = CourseSearchService()
@@ -15,7 +16,8 @@ struct AICaddyApp: App {
                 locationService: locationService,
                 speechService: speechService,
                 shotParser: shotParser,
-                courseSearch: courseSearch
+                courseSearch: courseSearch,
+                clubRecommender: clubRecommender
             )
             .preferredColorScheme(.dark)
         }

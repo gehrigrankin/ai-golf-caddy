@@ -9,6 +9,7 @@ struct HomeView: View {
     let speechService: SpeechService
     let shotParser: ShotParserService
     let courseSearch: CourseSearchService
+    let clubRecommender: ClubRecommendationService
 
     private var inProgressRound: Round? {
         allRounds.first { !$0.isComplete }
@@ -123,7 +124,8 @@ struct HomeView: View {
                     locationService: locationService,
                     speechService: speechService,
                     shotParser: shotParser,
-                    courseSearch: courseSearch
+                    courseSearch: courseSearch,
+                    clubRecommender: clubRecommender
                 )
             }
         }

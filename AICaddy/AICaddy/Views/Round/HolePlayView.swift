@@ -17,6 +17,7 @@ struct HolePlayView: View {
 
     @Bindable var speech: SpeechService
     let shotParser: ShotParserService
+    var clubRecommendation: ClubRecommendation?
 
     private var runningToPar: Int { totalScore - totalPar }
     private var holesPlayed: Int { hole.holeNumber - 1 }
@@ -150,11 +151,21 @@ struct HolePlayView: View {
                     }
                 }
 
+                // Club recommendation (the AI caddy!)
+                if let rec = clubRecommendation {
+                    ClubRecommendationView(recommendation: rec)
+                }
+
+                // Quick-input buttons for common scores
+                QuickScoreButtons(par: hole.par) { input in
+                    handleInput(input)
+                }
+
                 // Voice / text input
                 VoiceInputView(
                     onResult: handleInput,
                     disabled: parsing,
-                    placeholder: "\"driver 250 fairway\" or just \"\(hole.par)\"",
+                    placeholder: voicePrompt,
                     speech: speech
                 )
 
@@ -343,5 +354,78 @@ struct HolePlayView: View {
     }
     private var girBg: Color {
         hole.greenInRegulation == true ? .green.opacity(0.15) : hole.greenInRegulation == false ? .red.opacity(0.15) : Color(.systemGray6)
+    }
+
+    /// Context-aware voice prompt that changes based on what shot you're on
+    private var voicePrompt: String {
+        let shotNum = hole.shots.count + 1
+        if shotNum == 1 {
+            // Tee shot
+            if hole.par == 3 { return "\"7 iron on the green\" or \"par\"" }
+            return "\"driver 250 fairway\" or \"\(hole.par)\""
+        } else if hole.greenInRegulation == true || hole.shots.last?.result == .green {
+            // On the green
+            return "\"2 putts\" or \"1 putt birdie\""
+        } else if shotNum == hole.par - 1 {
+            // Approach shot
+            return "\"8 iron on the green\" or \"bunker\""
+        } else if hole.shots.last?.result == .bunker {
+            return "\"sand wedge on the green\" or \"chip and a putt\""
+        } else {
+            return "\"chip and 2 putts\" or \"bogey\""
+        }
+    }
+}
+
+// MARK: - Quick Score Buttons
+
+struct QuickScoreButtons: View {
+    let par: Int
+    let onInput: (String) -> Void
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text("Quick Input")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+
+            HStack(spacing: 6) {
+                QuickButton(label: "Birdie", sub: "\(par - 1)", color: .red) {
+                    onInput("birdie")
+                }
+                QuickButton(label: "Par", sub: "\(par)", color: .green) {
+                    onInput("par")
+                }
+                QuickButton(label: "Bogey", sub: "\(par + 1)", color: .cyan) {
+                    onInput("bogey")
+                }
+                QuickButton(label: "Dbl", sub: "\(par + 2)", color: .blue) {
+                    onInput("double bogey")
+                }
+            }
+        }
+    }
+}
+
+private struct QuickButton: View {
+    let label: String
+    let sub: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(color)
+                Text(sub)
+                    .font(.system(size: 15, weight: .bold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(color.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
     }
 }
