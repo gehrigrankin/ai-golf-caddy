@@ -159,9 +159,11 @@ struct NineHoleGrid: View {
                 .foregroundStyle(.tertiary)
                 .frame(width: 28, alignment: .leading)
             ForEach(holes) { hole in
-                Text(hole.greenInRegulation == true ? "●" : hole.greenInRegulation == false ? "○" : "-")
+                let girText: String = hole.greenInRegulation == true ? "●" : (hole.greenInRegulation == false ? "○" : "-")
+                let girColor: Color = hole.greenInRegulation == true ? .green : .secondary
+                Text(girText)
                     .font(.system(size: 9))
-                    .foregroundStyle(hole.greenInRegulation == true ? .green : .tertiary)
+                    .foregroundStyle(girColor)
                     .frame(maxWidth: .infinity)
             }
             Text("\(girCount)/\(girTotal)")
