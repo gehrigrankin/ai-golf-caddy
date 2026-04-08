@@ -1,5 +1,7 @@
 import SwiftUI
+import UIKit
 import MapKit
+import CoreLocation
 
 // MARK: - Main View
 

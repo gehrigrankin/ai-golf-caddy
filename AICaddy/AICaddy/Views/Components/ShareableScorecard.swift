@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Renders a scorecard as a shareable image
 struct ShareableScorecard: View {

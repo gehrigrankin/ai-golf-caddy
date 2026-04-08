@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 
 /// Overlay shot traces on the hole map — draw actual shot paths
 struct ShotTracerView: View {

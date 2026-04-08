@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import CarPlay
 
 /// CarPlay integration — quick-start a round when you arrive at the course
