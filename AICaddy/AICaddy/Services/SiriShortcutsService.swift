@@ -92,7 +92,6 @@ struct AICaddyShortcuts: AppShortcutsProvider {
                 intent: StartRoundIntent(),
                 phrases: [
                     "Start a round with \(.applicationName)",
-                    "Start a round at \(\.$courseName) with \(.applicationName)",
                     "Begin golf round with \(.applicationName)"
                 ],
                 shortTitle: "Start Round",
