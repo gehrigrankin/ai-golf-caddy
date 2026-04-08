@@ -62,101 +62,112 @@ struct NineHoleGrid: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            // Hole numbers
-            HStack(spacing: 0) {
-                Text(label)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, alignment: .leading)
-                ForEach(holes) { hole in
-                    Text("\(hole.holeNumber)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
-                Text("Tot")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32)
-            }
-
-            // Par
-            HStack(spacing: 0) {
-                Text("Par")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, alignment: .leading)
-                ForEach(holes) { hole in
-                    Text("\(hole.par)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
-                Text("\(totalPar)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32)
-            }
-
-            // Scores
-            HStack(spacing: 0) {
-                Text("Score")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, alignment: .leading)
-                ForEach(holes) { hole in
-                    Button {
-                        onHoleTap?(hole.holeNumber)
-                    } label: {
-                        ScoreCircle(strokes: hole.strokes, par: hole.par, size: 26)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                Text(totalScore > 0 ? "\(totalScore)" : "-")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 32)
-            }
-
-            // Putts
-            HStack(spacing: 0) {
-                Text("Putt")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 28, alignment: .leading)
-                ForEach(holes) { hole in
-                    Text(hole.putts.map { "\($0)" } ?? "-")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity)
-                }
-                Text("\(holes.compactMap(\.putts).reduce(0, +))")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 32)
-            }
-
-            // GIR
-            HStack(spacing: 0) {
-                Text("GIR")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 28, alignment: .leading)
-                ForEach(holes) { hole in
-                    Text(hole.greenInRegulation == true ? "●" : hole.greenInRegulation == false ? "○" : "-")
-                        .font(.system(size: 9))
-                        .foregroundStyle(hole.greenInRegulation == true ? .green : .tertiary)
-                        .frame(maxWidth: .infinity)
-                }
-                let girCount = holes.filter { $0.greenInRegulation == true }.count
-                let girTotal = holes.filter { $0.greenInRegulation != nil }.count
-                Text("\(girCount)/\(girTotal)")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 32)
-            }
+            holeNumbersRow
+            parRow
+            scoresRow
+            puttsRow
+            girRow
         }
         .padding(8)
         .background(Color(.systemGray6).opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var holeNumbersRow: some View {
+        HStack(spacing: 0) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
+            ForEach(holes) { hole in
+                Text("\(hole.holeNumber)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            }
+            Text("Tot")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 32)
+        }
+    }
+
+    private var parRow: some View {
+        HStack(spacing: 0) {
+            Text("Par")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
+            ForEach(holes) { hole in
+                Text("\(hole.par)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            }
+            Text("\(totalPar)")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 32)
+        }
+    }
+
+    private var scoresRow: some View {
+        HStack(spacing: 0) {
+            Text("Score")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
+            ForEach(holes) { hole in
+                Button {
+                    onHoleTap?(hole.holeNumber)
+                } label: {
+                    ScoreCircle(strokes: hole.strokes, par: hole.par, size: 26)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            Text(totalScore > 0 ? "\(totalScore)" : "-")
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 32)
+        }
+    }
+
+    private var puttsRow: some View {
+        HStack(spacing: 0) {
+            Text("Putt")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+                .frame(width: 28, alignment: .leading)
+            ForEach(holes) { hole in
+                Text(hole.putts.map { "\($0)" } ?? "-")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+            }
+            Text("\(holes.compactMap(\.putts).reduce(0, +))")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+                .frame(width: 32)
+        }
+    }
+
+    private var girRow: some View {
+        let girCount = holes.filter { $0.greenInRegulation == true }.count
+        let girTotal = holes.filter { $0.greenInRegulation != nil }.count
+        return HStack(spacing: 0) {
+            Text("GIR")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+                .frame(width: 28, alignment: .leading)
+            ForEach(holes) { hole in
+                Text(hole.greenInRegulation == true ? "●" : hole.greenInRegulation == false ? "○" : "-")
+                    .font(.system(size: 9))
+                    .foregroundStyle(hole.greenInRegulation == true ? .green : .tertiary)
+                    .frame(maxWidth: .infinity)
+            }
+            Text("\(girCount)/\(girTotal)")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+                .frame(width: 32)
+        }
     }
 }

@@ -124,9 +124,9 @@ struct CourseSearchView: View {
                     if found.isEmpty { error = "No courses found. Try a different name." }
                     searching = false
                 }
-            } catch {
+            } catch let searchError {
                 await MainActor.run {
-                    self.error = error.localizedDescription
+                    self.error = searchError.localizedDescription
                     searching = false
                 }
             }
@@ -153,9 +153,9 @@ struct CourseSearchView: View {
                     if found.isEmpty { error = "No courses found nearby." }
                     searching = false
                 }
-            } catch {
+            } catch let searchError {
                 await MainActor.run {
-                    self.error = error.localizedDescription
+                    self.error = searchError.localizedDescription
                     searching = false
                 }
             }

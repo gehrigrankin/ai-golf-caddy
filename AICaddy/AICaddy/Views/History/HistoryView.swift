@@ -3,7 +3,7 @@ import SwiftData
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<Round> { $0.isComplete },
+    @Query(filter: #Predicate<Round> { $0.isComplete == true },
            sort: \Round.date, order: .reverse)
     private var rounds: [Round]
 

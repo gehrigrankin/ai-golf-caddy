@@ -38,7 +38,7 @@ final class ElevationService {
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
 
         do {
-            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            _ = try await geocoder.reverseGeocodeLocation(location)
             // CLPlacemark doesn't directly provide elevation
             // We rely on CLLocation's altitude from the GPS instead
             return location.altitude

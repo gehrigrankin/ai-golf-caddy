@@ -3,7 +3,7 @@ import SwiftData
 
 /// Comprehensive stats dashboard with all the analytics
 struct StatsDeepDiveView: View {
-    @Query(filter: #Predicate<Round> { $0.isComplete }, sort: \Round.date, order: .reverse)
+    @Query(filter: #Predicate<Round> { $0.isComplete == true }, sort: \Round.date, order: .reverse)
     private var rounds: [Round]
 
     @State private var selectedTab = 0
@@ -148,106 +148,40 @@ struct StatsDeepDiveView: View {
         let analysis = AdvancedStatsCalculator.parTypeAnalysis(rounds: rounds.map { $0 })
 
         VStack(spacing: 16) {
-            ForEach([(3, analysis.par3), (4, analysis.par4), (5, analysis.par5)], id: \.0) { par, stats in
-                if stats.count > 0 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Par \(par)s")
-                                .font(.headline.bold())
-                            Spacer()
-                            Text("\(stats.count) holes played")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack {
-                            Text("Avg: \(String(format: "%.1f", Double(par) + stats.avgToPar))")
-                                .font(.subheadline)
-                            Text("(\(stats.avgToPar >= 0 ? "+" : "")\(String(format: "%.1f", stats.avgToPar)) vs par)")
-                                .font(.caption)
-                                .foregroundStyle(stats.avgToPar <= 0 ? .green : .red)
-                        }
-
-                        // Scoring distribution bar
-                        HStack(spacing: 2) {
-                            if stats.birdieOrBetter > 0 {
-                                DistBar(label: "Bird+", count: stats.birdieOrBetter, total: stats.count, color: .red)
-                            }
-                            if stats.pars > 0 {
-                                DistBar(label: "Par", count: stats.pars, total: stats.count, color: .green)
-                            }
-                            if stats.bogeys > 0 {
-                                DistBar(label: "Bogey", count: stats.bogeys, total: stats.count, color: .cyan)
-                            }
-                            if stats.doublePlus > 0 {
-                                DistBar(label: "Dbl+", count: stats.doublePlus, total: stats.count, color: .blue)
-                            }
-                        }
-                        .frame(height: 24)
-
-                        Text("Total vs par: \(stats.totalToPar >= 0 ? "+" : "")\(stats.totalToPar)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding()
-                    .background(Color(.systemGray6).opacity(0.5))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-            }
+            ParSplitCard(par: 3, stats: analysis.par3)
+            ParSplitCard(par: 4, stats: analysis.par4)
+            ParSplitCard(par: 5, stats: analysis.par5)
         }
         .padding(.horizontal)
     }
 
     // MARK: - Clubs
 
-    @ViewBuilder
-    private var clubsTab: some View {
-        let dispersion = AdvancedStatsCalculator.shotDispersion(rounds: rounds.map { $0 })
+    private func buildClubDistances() -> [Club: [Int]] {
         var clubDists: [Club: [Int]] = [:]
-
-        let _ = rounds.forEach { round in
-            round.holes.forEach { hole in
-                hole.shots.filter { !$0.isPutt }.forEach { shot in
+        for round in rounds {
+            for hole in round.holes {
+                for shot in hole.shots where !shot.isPutt {
                     if let club = shot.club, let dist = shot.distanceYards, dist > 0 {
                         clubDists[club, default: []].append(dist)
                     }
                 }
             }
         }
+        return clubDists
+    }
+
+    @ViewBuilder
+    private var clubsTab: some View {
+        let dispersion = AdvancedStatsCalculator.shotDispersion(rounds: rounds.map { $0 })
+        let clubDists = buildClubDistances()
 
         VStack(spacing: 12) {
             ForEach(
                 clubDists.sorted { ($0.value.reduce(0, +) / max(1, $0.value.count)) > ($1.value.reduce(0, +) / max(1, $1.value.count)) },
                 id: \.key
             ) { club, distances in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(club.displayName)
-                            .font(.subheadline.bold())
-                        Spacer()
-                        Text("avg \(distances.reduce(0, +) / distances.count)y")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.green)
-                    }
-
-                    HStack(spacing: 12) {
-                        Text("Min: \(distances.min() ?? 0)y")
-                            .font(.caption2).foregroundStyle(.secondary)
-                        Text("Max: \(distances.max() ?? 0)y")
-                            .font(.caption2).foregroundStyle(.secondary)
-                        Text("\(distances.count) shots")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-
-                    if let disp = dispersion[club] {
-                        Text(disp.missTendency)
-                            .font(.caption2)
-                            .foregroundStyle(disp.missTendency == "Balanced" ? .green : .orange)
-                    }
-                }
-                .padding(10)
-                .background(Color(.systemGray6).opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                ClubDistanceRow(club: club, distances: distances, dispersion: dispersion[club])
             }
         }
         .padding(.horizontal)
@@ -281,6 +215,94 @@ struct StatsDeepDiveView: View {
 }
 
 // MARK: - Helper Views
+
+private struct ParSplitCard: View {
+    let par: Int
+    let stats: ParTypeStats
+
+    var body: some View {
+        if stats.count > 0 {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Par \(par)s")
+                        .font(.headline.bold())
+                    Spacer()
+                    Text("\(stats.count) holes played")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Text("Avg: \(String(format: "%.1f", Double(par) + stats.avgToPar))")
+                        .font(.subheadline)
+                    Text("(\(stats.avgToPar >= 0 ? "+" : "")\(String(format: "%.1f", stats.avgToPar)) vs par)")
+                        .font(.caption)
+                        .foregroundStyle(stats.avgToPar <= 0 ? .green : .red)
+                }
+
+                HStack(spacing: 2) {
+                    if stats.birdieOrBetter > 0 {
+                        DistBar(label: "Bird+", count: stats.birdieOrBetter, total: stats.count, color: .red)
+                    }
+                    if stats.pars > 0 {
+                        DistBar(label: "Par", count: stats.pars, total: stats.count, color: .green)
+                    }
+                    if stats.bogeys > 0 {
+                        DistBar(label: "Bogey", count: stats.bogeys, total: stats.count, color: .cyan)
+                    }
+                    if stats.doublePlus > 0 {
+                        DistBar(label: "Dbl+", count: stats.doublePlus, total: stats.count, color: .blue)
+                    }
+                }
+                .frame(height: 24)
+
+                Text("Total vs par: \(stats.totalToPar >= 0 ? "+" : "")\(stats.totalToPar)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(Color(.systemGray6).opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+private struct ClubDistanceRow: View {
+    let club: Club
+    let distances: [Int]
+    let dispersion: ShotDispersion?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(club.displayName)
+                    .font(.subheadline.bold())
+                Spacer()
+                Text("avg \(distances.reduce(0, +) / distances.count)y")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.green)
+            }
+
+            HStack(spacing: 12) {
+                Text("Min: \(distances.min() ?? 0)y")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Text("Max: \(distances.max() ?? 0)y")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Text("\(distances.count) shots")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
+            if let disp = dispersion {
+                Text(disp.missTendency)
+                    .font(.caption2)
+                    .foregroundStyle(disp.missTendency == "Balanced" ? .green : .orange)
+            }
+        }
+        .padding(10)
+        .background(Color(.systemGray6).opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
 
 private struct SGCard: View {
     let label: String

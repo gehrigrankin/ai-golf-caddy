@@ -12,7 +12,7 @@ struct RoundView: View {
     let clubRecommender: ClubRecommendationService
 
     @Query(sort: \Course.createdAt, order: .reverse) private var savedCourses: [Course]
-    @Query(filter: #Predicate<Round> { $0.isComplete }, sort: \Round.date) private var completedRounds: [Round]
+    @Query(filter: #Predicate<Round> { $0.isComplete == true }, sort: \Round.date) private var completedRounds: [Round]
 
     @State private var phase: Phase = .search
     @State private var round: Round?
@@ -62,7 +62,7 @@ struct RoundView: View {
                     .navigationTitle(activeCourse != nil ? "Select Tee" : "New Round")
 
                 case .play:
-                    if let round, var hole = currentHoleBinding {
+                    if let round, let _ = currentHoleBinding {
                         VStack(spacing: 0) {
                             if showScorecard {
                                 ScrollView {

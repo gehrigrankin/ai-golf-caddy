@@ -13,7 +13,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         self.interfaceController = interfaceController
 
         let rootTemplate = buildRootTemplate()
-        interfaceController.setRootTemplate(rootTemplate, animated: true)
+        interfaceController.setRootTemplate(rootTemplate, animated: true, completion: nil)
     }
 
     func templateApplicationScene(
@@ -63,7 +63,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             titleVariants: ["Opening AI Caddy"],
             actions: [CPAlertAction(title: "OK", style: .default, handler: { _ in })]
         )
-        interfaceController?.presentTemplate(alert, animated: true)
+        interfaceController?.presentTemplate(alert, animated: true, completion: nil)
     }
 
     private func handleResumeRound() {
@@ -73,7 +73,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             titleVariants: ["Resuming your round"],
             actions: [CPAlertAction(title: "OK", style: .default, handler: { _ in })]
         )
-        interfaceController?.presentTemplate(alert, animated: true)
+        interfaceController?.presentTemplate(alert, animated: true, completion: nil)
     }
 
     private func showHandicap() {
@@ -84,6 +84,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             titleVariants: [message],
             actions: [CPAlertAction(title: "OK", style: .default, handler: { _ in })]
         )
-        interfaceController?.presentTemplate(alert, animated: true)
+        interfaceController?.presentTemplate(alert, animated: true, completion: nil)
     }
 }

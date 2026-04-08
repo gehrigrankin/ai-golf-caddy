@@ -80,7 +80,7 @@ struct ActiveRoundWatch: View {
                             Text("\(score)")
                                 .font(.system(size: 14, weight: .bold))
                                 .frame(width: 28, height: 28)
-                                .background(Color(.darkGray))
+                                .background(Color.gray.opacity(0.4))
                                 .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
@@ -98,7 +98,7 @@ struct ActiveRoundWatch: View {
                             Text("\(p)")
                                 .font(.system(size: 14, weight: .bold))
                                 .frame(width: 32, height: 28)
-                                .background(Color(.darkGray))
+                                .background(Color.gray.opacity(0.4))
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                         .buttonStyle(.plain)

@@ -21,6 +21,6 @@ struct AICaddyApp: App {
             )
             .preferredColorScheme(.dark)
         }
-        .modelContainer(for: [Course.self, Round.self])
+        .modelContainer(for: [Course.self, Round.self, GolfBag.self, EquipmentLog.self])
     }
 }

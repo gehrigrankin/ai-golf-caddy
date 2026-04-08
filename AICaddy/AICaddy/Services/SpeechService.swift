@@ -50,8 +50,8 @@ final class SpeechService {
         do {
             try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch {
-            self.error = "Audio session error"
+        } catch let audioError {
+            self.error = "Audio session error: \(audioError.localizedDescription)"
             return
         }
 
@@ -66,21 +66,21 @@ final class SpeechService {
         do {
             try audioEngine.start()
             isListening = true
-        } catch {
-            self.error = "Could not start audio engine"
+        } catch let engineError {
+            self.error = "Could not start audio engine: \(engineError.localizedDescription)"
             return
         }
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] taskResult, taskError in
             guard let self else { return }
 
-            if let result {
-                let text = result.bestTranscription.formattedString
+            if let taskResult {
+                let text = taskResult.bestTranscription.formattedString
                 DispatchQueue.main.async {
                     self.transcript = text
                 }
 
-                if result.isFinal {
+                if taskResult.isFinal {
                     DispatchQueue.main.async {
                         self.stopListening()
                         onResult(text)
@@ -88,11 +88,11 @@ final class SpeechService {
                 }
             }
 
-            if let error {
+            if let taskError {
                 DispatchQueue.main.async {
                     // Don't report cancellation errors
-                    if (error as NSError).code != 216 {
-                        self.error = error.localizedDescription
+                    if (taskError as NSError).code != 216 {
+                        self.error = taskError.localizedDescription
                     }
                     self.stopListening()
                 }

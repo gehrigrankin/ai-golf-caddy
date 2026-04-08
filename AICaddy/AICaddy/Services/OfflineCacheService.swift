@@ -60,9 +60,9 @@ final class OfflineCacheService {
                 }
                 saveCachedList()
             }
-        } catch {
+        } catch let downloadError {
             await MainActor.run {
-                self.error = "Download failed: \(error.localizedDescription)"
+                self.error = "Download failed: \(downloadError.localizedDescription)"
                 isDownloading = false
             }
         }

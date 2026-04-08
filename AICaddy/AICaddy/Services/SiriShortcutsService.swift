@@ -87,42 +87,44 @@ struct RoundStatusIntent: AppIntent {
 
 struct AICaddyShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(
-            intent: StartRoundIntent(),
-            phrases: [
-                "Start a round with \(.applicationName)",
-                "Start a round at \(\.$courseName) with \(.applicationName)",
-                "Begin golf round with \(.applicationName)"
-            ],
-            shortTitle: "Start Round",
-            systemImageName: "flag.fill"
-        )
-        AppShortcut(
-            intent: LogScoreIntent(),
-            phrases: [
-                "I made \(\.$scoreInput) with \(.applicationName)",
-                "Log \(\.$scoreInput) with \(.applicationName)"
-            ],
-            shortTitle: "Log Score",
-            systemImageName: "plus.circle.fill"
-        )
-        AppShortcut(
-            intent: HandicapIntent(),
-            phrases: [
-                "What's my handicap with \(.applicationName)",
-                "Check my golf handicap with \(.applicationName)"
-            ],
-            shortTitle: "Handicap",
-            systemImageName: "number"
-        )
-        AppShortcut(
-            intent: RoundStatusIntent(),
-            phrases: [
-                "How's my round going with \(.applicationName)",
-                "What's my golf score with \(.applicationName)"
-            ],
-            shortTitle: "Round Status",
-            systemImageName: "chart.bar.fill"
-        )
+        return [
+            AppShortcut(
+                intent: StartRoundIntent(),
+                phrases: [
+                    "Start a round with \(.applicationName)",
+                    "Start a round at \(\.$courseName) with \(.applicationName)",
+                    "Begin golf round with \(.applicationName)"
+                ],
+                shortTitle: "Start Round",
+                systemImageName: "flag.fill"
+            ),
+            AppShortcut(
+                intent: LogScoreIntent(),
+                phrases: [
+                    "I made \(\.$scoreInput) with \(.applicationName)",
+                    "Log \(\.$scoreInput) with \(.applicationName)"
+                ],
+                shortTitle: "Log Score",
+                systemImageName: "plus.circle.fill"
+            ),
+            AppShortcut(
+                intent: HandicapIntent(),
+                phrases: [
+                    "What's my handicap with \(.applicationName)",
+                    "Check my golf handicap with \(.applicationName)"
+                ],
+                shortTitle: "Handicap",
+                systemImageName: "number"
+            ),
+            AppShortcut(
+                intent: RoundStatusIntent(),
+                phrases: [
+                    "How's my round going with \(.applicationName)",
+                    "What's my golf score with \(.applicationName)"
+                ],
+                shortTitle: "Round Status",
+                systemImageName: "chart.bar.fill"
+            ),
+        ]
     }
 }
