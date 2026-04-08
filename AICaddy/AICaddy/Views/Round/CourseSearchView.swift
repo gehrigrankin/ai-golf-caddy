@@ -7,6 +7,8 @@ struct CourseSearchView: View {
     let onCourseLoaded: (Course) -> Void
     let onSkip: () -> Void
 
+    private let osmService = OSMCourseService()
+
     @State private var query = ""
     @State private var results: [CourseSearchResult] = []
     @State private var searching = false
@@ -118,15 +120,15 @@ struct CourseSearchView: View {
 
         Task {
             do {
-                let found = try await courseSearch.searchByName(query)
+                let found = try await osmService.searchByName(query)
                 await MainActor.run {
                     results = found
                     if found.isEmpty { error = "No courses found. Try a different name." }
                     searching = false
                 }
-            } catch let searchError {
+            } catch {
                 await MainActor.run {
-                    self.error = searchError.localizedDescription
+                    self.error = "Search failed. Check your connection."
                     searching = false
                 }
             }
@@ -147,15 +149,15 @@ struct CourseSearchView: View {
 
         Task {
             do {
-                let found = try await courseSearch.searchNearby(lat: loc.latitude, lng: loc.longitude)
+                let found = try await osmService.searchNearby(lat: loc.latitude, lng: loc.longitude)
                 await MainActor.run {
                     results = found
                     if found.isEmpty { error = "No courses found nearby." }
                     searching = false
                 }
-            } catch let searchError {
+            } catch {
                 await MainActor.run {
-                    self.error = searchError.localizedDescription
+                    self.error = "Search failed. Check your connection."
                     searching = false
                 }
             }
@@ -163,19 +165,31 @@ struct CourseSearchView: View {
     }
 
     private func loadCourse(_ result: CourseSearchResult) {
+        guard let location = result.location else {
+            // No GPS for this course — just create a shell course
+            let course = Course(id: result.id, name: result.name, city: result.city, state: result.state)
+            onCourseLoaded(course)
+            return
+        }
+
         loadingId = result.id
         error = nil
 
         Task {
             do {
-                let details = try await courseSearch.fetchCourseDetails(id: result.id)
+                let holes = try await osmService.fetchCourseHoles(
+                    courseName: result.name,
+                    lat: location.lat,
+                    lng: location.lng
+                )
+                let tee = CourseTee(name: "Default", holes: holes.isEmpty ? defaultHoles() : holes)
                 let course = Course(
                     id: result.id,
-                    name: details.name,
-                    city: details.city,
-                    state: details.state,
-                    location: details.location,
-                    tees: details.tees
+                    name: result.name,
+                    city: result.city,
+                    state: result.state,
+                    location: location,
+                    tees: [tee]
                 )
                 await MainActor.run {
                     loadingId = nil
@@ -183,10 +197,17 @@ struct CourseSearchView: View {
                 }
             } catch {
                 await MainActor.run {
-                    self.error = "Failed to load course details"
+                    self.error = "Failed to load hole data. Try manual setup."
                     loadingId = nil
                 }
             }
+        }
+    }
+
+    private func defaultHoles() -> [CourseHoleData] {
+        let defaultPars = [4, 4, 3, 4, 5, 4, 3, 4, 5, 4, 4, 3, 4, 5, 4, 3, 4, 5]
+        return defaultPars.enumerated().map { i, par in
+            CourseHoleData(holeNumber: i + 1, par: par)
         }
     }
 }
