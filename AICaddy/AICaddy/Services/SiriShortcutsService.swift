@@ -100,8 +100,8 @@ struct AICaddyShortcuts: AppShortcutsProvider {
             AppShortcut(
                 intent: LogScoreIntent(),
                 phrases: [
-                    "I made \(\.$scoreInput) with \(.applicationName)",
-                    "Log \(\.$scoreInput) with \(.applicationName)"
+                    "Log my golf score with \(.applicationName)",
+                    "Record my score with \(.applicationName)"
                 ],
                 shortTitle: "Log Score",
                 systemImageName: "plus.circle.fill"
