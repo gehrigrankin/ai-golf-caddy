@@ -5,6 +5,13 @@ struct RoundSummaryView: View {
     let onDone: () -> Void
     var onHoleTap: ((Int) -> Void)?
 
+    @State private var analysis: RoundAnalysis?
+    @State private var loadingAnalysis = false
+    @State private var showShareSheet = false
+    @State private var shareImage: UIImage?
+
+    private let analysisService = RoundAnalysisService()
+
     private var stats: RoundStats {
         StatsCalculator.calculate(holes: round.holes)
     }
@@ -115,21 +122,80 @@ struct RoundSummaryView: View {
                     )
                 }
 
-                Button {
-                    onDone()
-                } label: {
-                    Text("Done")
-                        .font(.headline)
-                        .foregroundStyle(.white)
+                // AI Coach Analysis
+                if let analysis {
+                    RoundAnalysisView(analysis: analysis)
+                } else if loadingAnalysis {
+                    HStack {
+                        ProgressView().tint(.green)
+                        Text("AI Coach is analyzing your round...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(.systemGray6).opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
+                // Action buttons
+                HStack(spacing: 12) {
+                    // Share scorecard
+                    Button {
+                        let card = ShareableScorecard(round: round, stats: stats)
+                        shareImage = card.renderImage()
+                        showShareSheet = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Share")
+                        }
+                        .font(.subheadline.bold())
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.green)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.vertical, 14)
+                        .background(Color(.systemGray5))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    Button {
+                        onDone()
+                    } label: {
+                        Text("Done")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.green)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
                 }
             }
             .padding()
         }
+        .sheet(isPresented: $showShareSheet) {
+            if let image = shareImage {
+                ShareSheet(items: [image])
+            }
+        }
+        .task {
+            guard analysis == nil, round.isComplete else { return }
+            loadingAnalysis = true
+            analysis = await analysisService.analyze(round: round)
+            loadingAnalysis = false
+        }
     }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 struct StatCard: View {

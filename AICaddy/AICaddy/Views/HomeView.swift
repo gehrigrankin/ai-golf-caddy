@@ -19,6 +19,17 @@ struct HomeView: View {
         Array(allRounds.filter(\.isComplete).prefix(5))
     }
 
+    private var handicapRounds: [HandicapRound] {
+        allRounds.filter(\.isComplete)
+            .sorted { $0.date > $1.date }
+            .prefix(20)
+            .compactMap { HandicapRound.fromRound($0) }
+    }
+
+    private var calculatedHandicap: Double? {
+        HandicapCalculator.calculateIndex(rounds: handicapRounds)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -35,6 +46,31 @@ struct HomeView: View {
                             .multilineTextAlignment(.center)
                     }
                     .padding(.top, 20)
+
+                    // Handicap Index
+                    if let handicap = calculatedHandicap {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("HANDICAP INDEX")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.1f", handicap))
+                                    .font(.system(size: 28, weight: .bold))
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("\(handicapRounds.count) rounds")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("WHS")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemGray6).opacity(0.6))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
 
                     // Resume in-progress
                     if let inProgress = inProgressRound {
