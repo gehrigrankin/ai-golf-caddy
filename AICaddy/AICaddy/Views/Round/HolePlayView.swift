@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 struct HolePlayView: View {
     @Binding var hole: HoleScore
