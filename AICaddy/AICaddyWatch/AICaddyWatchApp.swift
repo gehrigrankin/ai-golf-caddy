@@ -66,6 +66,13 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate {
         }
     }
 
+    // State pushed while the watch app was asleep arrives here
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        DispatchQueue.main.async {
+            self.updateFromMessage(applicationContext)
+        }
+    }
+
     func sessionReachabilityDidChange(_ session: WCSession) {
         DispatchQueue.main.async {
             self.isReachable = session.isReachable

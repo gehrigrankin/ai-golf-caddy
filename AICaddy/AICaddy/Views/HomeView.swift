@@ -2,13 +2,15 @@ import SwiftUI
 import SwiftData
 
 struct HomeView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Round.date, order: .reverse) private var allRounds: [Round]
-    @State private var showNewRound = false
+    @State private var showRound = false
+    @State private var resumeTarget: Round?
+    @State private var showInProgressChoice = false
 
     let locationService: LocationService
     let speechService: SpeechService
     let shotParser: ShotParserService
-    let courseSearch: CourseSearchService
     let clubRecommender: ClubRecommendationService
 
     private var inProgressRound: Round? {
@@ -66,14 +68,37 @@ struct HomeView: View {
                 .padding(.horizontal, 20)
             }
             .background(Color.black)
-            .fullScreenCover(isPresented: $showNewRound) {
+            .fullScreenCover(isPresented: $showRound) {
                 RoundView(
                     locationService: locationService,
                     speechService: speechService,
                     shotParser: shotParser,
-                    courseSearch: courseSearch,
-                    clubRecommender: clubRecommender
+                    clubRecommender: clubRecommender,
+                    existingRound: resumeTarget
                 )
+            }
+            .confirmationDialog(
+                "You have a round in progress at \(inProgressRound?.courseName ?? "a course").",
+                isPresented: $showInProgressChoice,
+                titleVisibility: .visible
+            ) {
+                Button("Resume That Round") {
+                    resumeTarget = inProgressRound
+                    showRound = true
+                }
+                Button("Discard It & Start New", role: .destructive) {
+                    if let stale = inProgressRound {
+                        modelContext.delete(stale)
+                    }
+                    resumeTarget = nil
+                    showRound = true
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .onAppear {
+                // Ask for location up front so the permission prompt doesn't
+                // stack on top of mic + speech prompts at the first tee.
+                locationService.requestPermission()
             }
         }
     }
@@ -125,7 +150,10 @@ struct HomeView: View {
         VStack(spacing: 12) {
             // Resume in-progress round
             if let inProgress = inProgressRound {
-                Button { showNewRound = true } label: {
+                Button {
+                    resumeTarget = inProgress
+                    showRound = true
+                } label: {
                     HStack(spacing: 14) {
                         // Hole progress ring
                         ZStack {
@@ -175,7 +203,14 @@ struct HomeView: View {
             }
 
             // Start new round button
-            Button { showNewRound = true } label: {
+            Button {
+                if inProgressRound != nil {
+                    showInProgressChoice = true
+                } else {
+                    resumeTarget = nil
+                    showRound = true
+                }
+            } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .bold))
@@ -265,7 +300,7 @@ struct HomeView: View {
                     NavigationLink { BagView() } label: { Color.clear }
                 }
                 NavCard(icon: "gear", title: "Settings", accent: .gray) {
-                    NavigationLink { Text("Settings") } label: { Color.clear }
+                    NavigationLink { SettingsView() } label: { Color.clear }
                 }
             }
         }

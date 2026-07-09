@@ -13,6 +13,8 @@ final class SpeechService {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    private var onResult: ((String) -> Void)?
+    private var resultDelivered = false
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -36,11 +38,17 @@ final class SpeechService {
         }
 
         // Stop any existing session
-        stopListening()
+        cancelListening()
+
+        self.onResult = onResult
+        resultDelivered = false
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        request.requiresOnDeviceRecognition = false  // use server for accuracy, falls back to on-device
+        // Golf courses have spotty cell coverage — stay on-device whenever the
+        // hardware supports it so voice input works with zero signal.
+        request.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
+        request.taskHint = .dictation
 
         recognitionRequest = request
         transcript = ""
@@ -68,6 +76,7 @@ final class SpeechService {
             isListening = true
         } catch let engineError {
             self.error = "Could not start audio engine: \(engineError.localizedDescription)"
+            deactivateAudioSession()
             return
         }
 
@@ -82,31 +91,63 @@ final class SpeechService {
 
                 if taskResult.isFinal {
                     DispatchQueue.main.async {
-                        self.stopListening()
-                        onResult(text)
+                        self.finishListening(deliver: true)
                     }
                 }
             }
 
             if let taskError {
                 DispatchQueue.main.async {
-                    // Don't report cancellation errors
-                    if (taskError as NSError).code != 216 {
+                    let code = (taskError as NSError).code
+                    // 216/301 = cancellation — not a real error. If we have a
+                    // transcript, deliver it rather than dropping the input.
+                    if code != 216 && code != 301 && self.transcript.isEmpty {
                         self.error = taskError.localizedDescription
                     }
-                    self.stopListening()
+                    self.finishListening(deliver: true)
                 }
             }
         }
     }
 
+    /// User tapped stop: hand the words we heard to the app. Cancelling the task
+    /// here without delivering would silently drop the input (the old bug that
+    /// made voice entry feel broken on the course).
     func stopListening() {
-        audioEngine.stop()
+        finishListening(deliver: true)
+    }
+
+    /// Tear down without delivering a result (e.g. leaving the screen).
+    func cancelListening() {
+        finishListening(deliver: false)
+    }
+
+    private func finishListening(deliver: Bool) {
+        let text = transcript
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
         recognitionRequest = nil
         recognitionTask = nil
         isListening = false
+        deactivateAudioSession()
+
+        if deliver, !resultDelivered, !text.trimmingCharacters(in: .whitespaces).isEmpty {
+            resultDelivered = true
+            let callback = onResult
+            onResult = nil
+            callback?(text)
+        } else if !deliver {
+            onResult = nil
+        }
+    }
+
+    /// Give the audio session back so the user's music resumes after dictation.
+    private func deactivateAudioSession() {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }

@@ -73,6 +73,11 @@ extension HandicapRound {
     static func fromRound(_ round: Round) -> HandicapRound? {
         guard round.isComplete else { return nil }
 
+        // Only full 18-hole rounds produce a valid differential — a 6-hole
+        // round scored as "42 strokes" would wreck the index.
+        let playedHoles = round.holes.filter { $0.strokes > 0 }.count
+        guard playedHoles >= 18 else { return nil }
+
         let stats = StatsCalculator.calculate(holes: round.holes)
         guard stats.totalStrokes > 0 else { return nil }
 
