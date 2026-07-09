@@ -6,12 +6,39 @@ import WeatherKit
 @Observable
 final class WeatherService {
     var windSpeed: Double?        // mph
-    var windDirection: Double?    // degrees, 0 = north
+    var windDirection: Double?    // degrees, 0 = north; direction wind blows FROM
     var windDirectionLabel: String?
     var temperature: Int?         // Fahrenheit
     var conditions: String?
     var lastUpdated: Date?
     var error: String?
+    var isManual = false          // user entered wind by hand (no WeatherKit needed)
+
+    var isStale: Bool {
+        guard let lastUpdated else { return true }
+        return Date().timeIntervalSince(lastUpdated) > 15 * 60
+    }
+
+    var hasWind: Bool { windSpeed != nil && windDirection != nil }
+
+    /// Manual wind entry — the on-course fallback when WeatherKit isn't available
+    /// (no entitlement, no signal). You can feel the wind; just tell the caddy.
+    func setManualWind(speedMph: Double, directionDegrees: Double) {
+        windSpeed = speedMph
+        windDirection = directionDegrees
+        windDirectionLabel = Self.compassDirection(directionDegrees)
+        lastUpdated = Date()
+        isManual = true
+        error = nil
+    }
+
+    func clearManualWind() {
+        guard isManual else { return }
+        windSpeed = nil
+        windDirection = nil
+        windDirectionLabel = nil
+        isManual = false
+    }
 
     /// Adjusted distance accounting for wind
     /// Headwind adds ~1% per mph, tailwind subtracts ~0.5% per mph
@@ -45,7 +72,21 @@ final class WeatherService {
         return directions[index % 16]
     }
 
+    /// One-line summary for the wind chip, e.g. "12 mph SW"
+    var windSummary: String? {
+        guard let windSpeed, let windDirectionLabel else { return nil }
+        return "\(Int(windSpeed.rounded())) mph \(windDirectionLabel)"
+    }
+
+    /// Combined wind + temperature "plays like" distance along a shot bearing.
+    func playsLikeDistance(yards: Int, shotBearing: Double) -> Int {
+        let windAdjusted = adjustedDistance(yards: yards, shotBearing: shotBearing)
+        let delta = windAdjusted - yards
+        return temperatureAdjustment(yards: yards) + delta
+    }
+
     func fetchWeather(at location: CLLocationCoordinate2D) async {
+        if isManual { return }  // don't clobber what the user told us
         do {
             let weatherService = WeatherKit.WeatherService.shared
             let weather = try await weatherService.weather(for: CLLocation(latitude: location.latitude, longitude: location.longitude))
@@ -67,15 +108,17 @@ final class WeatherService {
         }
     }
 
-    /// Temperature-based distance adjustment
-    /// Ball flies ~2 yards less per 10°F below 70°F, ~1 yard more per 10°F above
+    /// Temperature-based "plays like" adjustment.
+    /// Cold air is denser: the ball flies ~2y shorter per 10°F below 70°F, so the
+    /// shot PLAYS LONGER (add yards). Hot air: ball flies ~1y farther per 10°F
+    /// above 70°F, so it PLAYS SHORTER (subtract yards).
     func temperatureAdjustment(yards: Int) -> Int {
         guard let temp = temperature else { return yards }
         let diff = Double(temp - 70)
         if diff < 0 {
-            return yards + Int((diff / 10.0 * 2.0).rounded())  // cold = shorter
+            return yards - Int((diff / 10.0 * 2.0).rounded())  // cold → plays longer
         } else {
-            return yards + Int((diff / 10.0 * 1.0).rounded())  // hot = longer
+            return yards - Int((diff / 10.0 * 1.0).rounded())  // hot → plays shorter
         }
     }
 }

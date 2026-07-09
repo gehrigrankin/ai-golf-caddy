@@ -1,6 +1,18 @@
 import Foundation
 import CoreLocation
 
+struct CourseSearchResult: Identifiable {
+    let id: String
+    let name: String
+    let city: String?
+    let state: String?
+    let location: GpsPoint?
+}
+
+enum CourseSearchError: Error {
+    case apiError
+}
+
 /// Free course search and hole data via OpenStreetMap Overpass API.
 /// No API key needed.
 final class OSMCourseService {
@@ -49,7 +61,7 @@ final class OSMCourseService {
         out body geom;
         """
         let data = try await overpassRequest(query: query)
-        return parseHoleData(data: data)
+        return parseHoleData(data: data, courseLat: lat, courseLng: lng)
     }
 
     // MARK: - Parsing
@@ -85,9 +97,10 @@ final class OSMCourseService {
         }
     }
 
-    private func parseHoleData(data: Data) -> [CourseHoleData] {
+    private func parseHoleData(data: Data, courseLat: Double, courseLng: Double) -> [CourseHoleData] {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let elements = json["elements"] as? [[String: Any]] else { return [] }
+        let courseCenter = CLLocationCoordinate2D(latitude: courseLat, longitude: courseLng)
 
         // Separate elements by type
         var holeWays: [[String: Any]] = []
@@ -110,68 +123,82 @@ final class OSMCourseService {
             }
         }
 
+        // Neighboring courses sit within the search radius in dense golf areas
+        // (metro Phoenix especially), so several ways can claim the same hole ref.
+        // Keep the candidate nearest to the course center for each hole number.
+        var bestHoleWay: [Int: (way: [String: Any], dist: Int)] = [:]
+        for holeWay in holeWays {
+            let tags = holeWay["tags"] as? [String: String] ?? [:]
+            guard let refStr = tags["ref"],
+                  let holeNumber = Int(refStr.trimmingCharacters(in: CharacterSet.decimalDigits.inverted)),
+                  (1...18).contains(holeNumber) else { continue }
+            guard let center = centroid(of: holeWay) else { continue }
+            let dist = LocationService.distanceYards(from: courseCenter, to: center.coordinate)
+            if let existing = bestHoleWay[holeNumber], existing.dist <= dist { continue }
+            bestHoleWay[holeNumber] = (holeWay, dist)
+        }
+
         // Parse holes
         var holes: [CourseHoleData] = []
 
-        for holeWay in holeWays {
+        for (holeNumber, entry) in bestHoleWay {
+            let holeWay = entry.way
             let tags = holeWay["tags"] as? [String: String] ?? [:]
             let geometry = holeWay["geometry"] as? [[String: Any]] ?? []
 
-            guard let refStr = tags["ref"], let holeNumber = Int(refStr) else { continue }
-
             let par = Int(tags["par"] ?? "") ?? 4
-            let yardage: Int?
+            var yardage: Int?
             if let distStr = tags["dist"] ?? tags["distance"] {
                 // OSM stores distance in meters typically
                 if let meters = Double(distStr) {
                     yardage = Int(meters * 1.09361)  // meters to yards
-                } else {
-                    yardage = nil
                 }
-            } else {
-                yardage = nil
             }
+
             let handicapIndex = Int(tags["handicap"] ?? "")
 
-            // Extract tee (first point of hole way) and green center (last point)
+            // The golf=hole way runs tee → green (possibly with dogleg points)
             var gps = HoleGps()
-
-            if let first = geometry.first,
-               let lat = first["lat"] as? Double, let lng = first["lon"] as? Double {
-                gps.tee = GpsPoint(lat: lat, lng: lng)
+            let points: [GpsPoint] = geometry.compactMap { pt in
+                guard let lat = pt["lat"] as? Double, let lng = pt["lon"] as? Double else { return nil }
+                return GpsPoint(lat: lat, lng: lng)
             }
 
-            if let last = geometry.last,
-               let lat = last["lat"] as? Double, let lng = last["lon"] as? Double {
-                gps.greenCenter = GpsPoint(lat: lat, lng: lng)
+            gps.tee = points.first
+            gps.greenCenter = points.last
+            if points.count > 2 {
+                gps.fairwayCenter = points[points.count / 2]
             }
 
-            // Find matching green way for front/back of green
-            if let greenWay = findNearestFeature(greenWays, to: gps.greenCenter) {
+            // No dist tag? Measure the hole way itself (follows the dogleg,
+            // unlike straight tee→green distance).
+            if yardage == nil, points.count >= 2 {
+                var total = 0
+                for i in 1..<points.count {
+                    total += LocationService.distanceYards(from: points[i-1].coordinate, to: points[i].coordinate)
+                }
+                if total > 50 { yardage = total }
+            }
+
+            // Front/back of green from the green polygon: OSM greens are closed
+            // rings (first vertex == last), so take the vertices nearest to and
+            // farthest from the tee instead of first/last.
+            if let greenWay = findNearestFeature(greenWays, to: gps.greenCenter),
+               let tee = gps.tee {
                 let greenGeom = greenWay["geometry"] as? [[String: Any]] ?? []
-                if let greenFirst = greenGeom.first, let greenLast = greenGeom.last {
-                    let frontLat = greenFirst["lat"] as? Double ?? 0
-                    let frontLng = greenFirst["lon"] as? Double ?? 0
-                    let backLat = greenLast["lat"] as? Double ?? 0
-                    let backLng = greenLast["lon"] as? Double ?? 0
-
-                    // Determine which is front/back based on distance to tee
-                    if let tee = gps.tee {
-                        let distToFirst = LocationService.distanceYards(
-                            from: tee.coordinate,
-                            to: CLLocationCoordinate2D(latitude: frontLat, longitude: frontLng)
-                        )
-                        let distToLast = LocationService.distanceYards(
-                            from: tee.coordinate,
-                            to: CLLocationCoordinate2D(latitude: backLat, longitude: backLng)
-                        )
-                        if distToFirst < distToLast {
-                            gps.greenFront = GpsPoint(lat: frontLat, lng: frontLng)
-                            gps.greenBack = GpsPoint(lat: backLat, lng: backLng)
-                        } else {
-                            gps.greenFront = GpsPoint(lat: backLat, lng: backLng)
-                            gps.greenBack = GpsPoint(lat: frontLat, lng: frontLng)
-                        }
+                let vertices: [GpsPoint] = greenGeom.compactMap { pt in
+                    guard let lat = pt["lat"] as? Double, let lng = pt["lon"] as? Double else { return nil }
+                    return GpsPoint(lat: lat, lng: lng)
+                }
+                if vertices.count >= 3 {
+                    let byDist = vertices.map { v in
+                        (point: v, dist: LocationService.distanceYards(from: tee.coordinate, to: v.coordinate))
+                    }
+                    gps.greenFront = byDist.min(by: { $0.dist < $1.dist })?.point
+                    gps.greenBack = byDist.max(by: { $0.dist < $1.dist })?.point
+                    // The polygon centroid is a better pin proxy than the way's last point
+                    if let center = centroid(of: greenWay) {
+                        gps.greenCenter = center
                     }
                 }
             }
@@ -247,7 +274,11 @@ final class OSMCourseService {
     private func overpassRequest(query: String) async throws -> Data {
         var request = URLRequest(url: URL(string: overpassURL)!)
         request.httpMethod = "POST"
-        request.httpBody = "data=\(query)".data(using: .utf8)
+        // Percent-encode: course names with &, +, or quotes would corrupt a raw body
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: allowed) ?? query
+        request.httpBody = "data=\(encoded)".data(using: .utf8)
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 20
 

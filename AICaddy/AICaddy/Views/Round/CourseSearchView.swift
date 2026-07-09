@@ -2,7 +2,6 @@ import SwiftUI
 import CoreLocation
 
 struct CourseSearchView: View {
-    let courseSearch: CourseSearchService
     let locationService: LocationService
     let onCourseLoaded: (Course) -> Void
     let onSkip: () -> Void

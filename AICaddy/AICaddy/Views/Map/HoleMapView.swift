@@ -10,6 +10,7 @@ struct HoleMapView: View {
     let holeNumber: Int
     let par: Int
     let userLocation: CLLocationCoordinate2D?
+    var playsLikeCenter: Int?
 
     @State private var dragTarget: CLLocationCoordinate2D?
     @State private var isFullScreen = false
@@ -110,8 +111,11 @@ struct HoleMapView: View {
                 DistancePill(label: "FRONT", yards: d, color: .green)
             }
             if let d = distToCenter {
-                DistancePill(label: "PIN", yards: d, color: .white)
-                    .scaleEffect(1.1)  // emphasize center distance
+                DistancePill(
+                    label: "PIN", yards: d, color: .white,
+                    subLabel: playsLikeCenter.map { "plays \($0)" }
+                )
+                .scaleEffect(1.1)  // emphasize center distance
             }
             if let d = distToBack {
                 DistancePill(label: "BACK", yards: d, color: .red)
@@ -192,6 +196,7 @@ struct DistancePill: View {
     let label: String
     let yards: Int
     let color: Color
+    var subLabel: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -202,6 +207,11 @@ struct DistancePill: View {
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(color)
                 .contentTransition(.numericText())
+            if let subLabel {
+                Text(subLabel)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.orange)
+            }
         }
         .frame(maxWidth: .infinity)
     }

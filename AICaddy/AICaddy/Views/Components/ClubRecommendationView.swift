@@ -23,13 +23,27 @@ struct ClubRecommendationView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("\(recommendation.targetDistance)y out")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            if let playsLike = recommendation.playsLikeDistance,
+                               playsLike != recommendation.targetDistance {
+                                Text("\(recommendation.targetDistance)y · plays \(playsLike)y")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            } else {
+                                Text("\(recommendation.targetDistance)y out")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         Text(recommendation.primaryClub.displayName)
                             .font(.title3.bold())
                             .foregroundStyle(.primary)
+                        // Your swing thought for this club, from My Bag
+                        if let thought = recommendation.swingThought, !thought.isEmpty {
+                            Text("“\(thought)”")
+                                .font(.caption)
+                                .italic()
+                                .foregroundStyle(.green)
+                        }
                     }
 
                     Spacer()
@@ -51,7 +65,8 @@ struct ClubRecommendationView: View {
                                 club: recommendation.primaryClub,
                                 avg: recommendation.primaryAvg,
                                 count: recommendation.primaryCount,
-                                isPrimary: true
+                                isPrimary: true,
+                                isFromHistory: recommendation.primaryIsFromHistory
                             )
 
                             if let alt = recommendation.alternateClub,
@@ -61,7 +76,8 @@ struct ClubRecommendationView: View {
                                     club: alt,
                                     avg: altAvg,
                                     count: altCount,
-                                    isPrimary: false
+                                    isPrimary: false,
+                                    isFromHistory: altCount >= 2
                                 )
                             }
                         }
@@ -86,16 +102,17 @@ private struct ClubOption: View {
     let avg: Int
     let count: Int
     let isPrimary: Bool
+    var isFromHistory: Bool = true
 
     var body: some View {
         VStack(spacing: 4) {
             Text(club.displayName)
                 .font(.subheadline.bold())
                 .foregroundStyle(isPrimary ? .green : .secondary)
-            Text("avg \(avg)y")
+            Text(isFromHistory ? "avg \(avg)y" : "typical \(avg)y")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("(\(count) shots)")
+            Text(isFromHistory ? "(\(count) shots)" : "(no data yet)")
                 .font(.system(size: 9))
                 .foregroundStyle(.tertiary)
         }

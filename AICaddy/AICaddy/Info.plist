@@ -10,7 +10,5 @@
     <string>AI Caddy uses speech recognition to convert your voice into shot data so you can track stats without typing.</string>
     <key>ANTHROPIC_API_KEY</key>
     <string>$(ANTHROPIC_API_KEY)</string>
-    <key>GOLFBERT_API_KEY</key>
-    <string>$(GOLFBERT_API_KEY)</string>
 </dict>
 </plist>

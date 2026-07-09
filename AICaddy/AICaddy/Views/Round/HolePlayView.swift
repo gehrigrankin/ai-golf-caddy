@@ -15,10 +15,15 @@ struct HolePlayView: View {
     @State private var parsing = false
     @State private var lastParse = ""
     @State private var showMap = true
+    @State private var showWindSheet = false
 
     @Bindable var speech: SpeechService
     let shotParser: ShotParserService
     var clubRecommendation: ClubRecommendation?
+    var weather: WeatherService?
+    var playsLikeToCenter: Int?
+
+    @AppStorage("showWind") private var showWind = true
 
     private var runningToPar: Int { totalScore - totalPar }
     private var holesPlayed: Int { hole.holeNumber - 1 }
@@ -54,14 +59,52 @@ struct HolePlayView: View {
                     }
                 }
 
-                // Map
+                // Wind & conditions chip — tap to set wind manually when
+                // there's no weather data (or to correct it)
+                if showWind, let weather {
+                    Button { showWindSheet = true } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "wind")
+                                .font(.caption)
+                            if let summary = weather.windSummary {
+                                Text(summary)
+                                if weather.isManual {
+                                    Text("(manual)").foregroundStyle(.tertiary)
+                                }
+                            } else {
+                                Text("Set wind")
+                            }
+                            if let temp = weather.temperature {
+                                Text("· \(temp)°")
+                            }
+                            if let playsLike = playsLikeToCenter {
+                                Text("· plays \(playsLike)y")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color(.systemGray6)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Map (with GPS) or distance-less fallback
                 if showMap, let gps = holeGps {
                     HoleMapView(
                         holeGps: gps,
                         holeNumber: hole.holeNumber,
                         par: hole.par,
-                        userLocation: userLocation
+                        userLocation: userLocation,
+                        playsLikeCenter: playsLikeToCenter
                     )
+                } else if holeGps == nil, hole.yardage == nil {
+                    Text("No GPS data for this hole — enter scores below")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
 
                 // Score +/- with circle
@@ -254,6 +297,12 @@ struct HolePlayView: View {
             .padding(.horizontal)
             .padding(.bottom, 20)
         }
+        .sheet(isPresented: $showWindSheet) {
+            if let weather {
+                ManualWindSheet(weather: weather)
+                    .presentationDetents([.height(320)])
+            }
+        }
     }
 
     // MARK: - Actions
@@ -288,7 +337,7 @@ struct HolePlayView: View {
         hole.shots = []
         hole.strokes = 0
         hole.putts = nil
-        hole.fairwayHit = hole.par >= 4 ? nil : nil
+        hole.fairwayHit = nil
         hole.greenInRegulation = nil
         hole.upAndDown = nil
         hole.sandSave = nil
@@ -309,6 +358,8 @@ struct HolePlayView: View {
             )
 
             await MainActor.run {
+                let hadShotsBefore = !hole.shots.isEmpty
+
                 if let strokes = parsed.totalStrokes {
                     hole.strokes = strokes
                     lastParse = "Score: \(strokes)"
@@ -317,7 +368,11 @@ struct HolePlayView: View {
                 if !parsed.shots.isEmpty {
                     hole.shots.append(contentsOf: parsed.shots)
                     if parsed.totalStrokes == nil {
-                        hole.strokes = hole.shots.count
+                        // Count penalties (water/OB) on top of swings, and never
+                        // DOWNGRADE a score the golfer already entered — adding
+                        // "2 putts" after saying "5" must not turn the 5 into a 2.
+                        let fromShots = hole.shots.count + hole.shots.filter(\.isPenalty).count
+                        hole.strokes = max(hole.strokes, fromShots)
                     }
                     let desc = parsed.shots.map { s in
                         [s.club?.displayName, s.distanceYards.map { "\($0)y" }, s.result?.displayName]
@@ -327,7 +382,11 @@ struct HolePlayView: View {
                 }
 
                 if let putts = parsed.putts { hole.putts = putts }
-                if let fir = parsed.fairwayHit { hole.fairwayHit = fir }
+                // "fairway" only means FIR when it describes the TEE shot — a
+                // par-5 layup finding the fairway isn't a fairway in regulation.
+                if let fir = parsed.fairwayHit, !hadShotsBefore || fir == false {
+                    hole.fairwayHit = fir
+                }
                 if let gir = parsed.greenInRegulation { hole.greenInRegulation = gir }
 
                 StatsCalculator.deriveHoleStats(&hole)
@@ -375,6 +434,94 @@ struct HolePlayView: View {
         } else {
             return "\"chip and 2 putts\" or \"bogey\""
         }
+    }
+}
+
+// MARK: - Manual Wind Entry
+
+/// Set wind by feel when WeatherKit data isn't available on the course.
+struct ManualWindSheet: View {
+    @Bindable var weather: WeatherService
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var speed: Double = 10
+    @State private var directionIndex: Int = 0
+
+    private static let directions: [(label: String, degrees: Double)] = [
+        ("N", 0), ("NE", 45), ("E", 90), ("SE", 135),
+        ("S", 180), ("SW", 225), ("W", 270), ("NW", 315),
+    ]
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Wind")
+                .font(.headline)
+
+            HStack {
+                Text("Speed")
+                    .foregroundStyle(.secondary)
+                Slider(value: $speed, in: 0...40, step: 1)
+                Text("\(Int(speed)) mph")
+                    .font(.subheadline.bold())
+                    .frame(width: 60, alignment: .trailing)
+                    .monospacedDigit()
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Blowing from")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Direction", selection: $directionIndex) {
+                    ForEach(Self.directions.indices, id: \.self) { i in
+                        Text(Self.directions[i].label).tag(i)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            HStack(spacing: 12) {
+                if weather.isManual {
+                    Button("Clear") {
+                        weather.clearManualWind()
+                        dismiss()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(.systemGray5))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                Button {
+                    weather.setManualWind(
+                        speedMph: speed,
+                        directionDegrees: Self.directions[directionIndex].degrees
+                    )
+                    dismiss()
+                } label: {
+                    Text("Set Wind")
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.green)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
+        .padding(20)
+        .onAppear {
+            if let s = weather.windSpeed { speed = s.rounded() }
+            if let d = weather.windDirection {
+                // nearest compass segment
+                let idx = Self.directions.enumerated().min(by: {
+                    angleDelta($0.element.degrees, d) < angleDelta($1.element.degrees, d)
+                })?.offset ?? 0
+                directionIndex = idx
+            }
+        }
+    }
+
+    private func angleDelta(_ a: Double, _ b: Double) -> Double {
+        let diff = abs(a - b).truncatingRemainder(dividingBy: 360)
+        return min(diff, 360 - diff)
     }
 }
 
