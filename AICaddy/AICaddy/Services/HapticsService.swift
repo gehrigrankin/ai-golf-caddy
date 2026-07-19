@@ -2,14 +2,18 @@ import UIKit
 
 /// Haptic feedback for distance milestones and events
 enum HapticsService {
-    /// Vibrate when reaching distance milestones
+    /// Vibrate when reaching distance milestones.
+    /// Windows must cover the full crossing range used by checkMilestones
+    /// (milestone-5...milestone), or crossings fire silently.
     static func distanceMilestone(_ yards: Int) {
         switch yards {
-        case 148...152:  // 150 out
+        case 195...205:  // 200 out
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        case 98...102:   // 100 out
+        case 145...155:  // 150 out
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        case 95...105:   // 100 out
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        case 48...52:    // 50 out
+        case 45...55:    // 50 out
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         default:
             break

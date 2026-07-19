@@ -96,6 +96,11 @@ final class CourseSearchService {
     private func fetchCourses(url: URL, apiKey: String) async throws -> [CourseSearchResult] {
         let data = try await golfbertRequest(url: url, apiKey: apiKey)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return Self.parseCourseResults(json)
+    }
+
+    /// Parse a course-list API response. Internal + static so tests can cover it.
+    static func parseCourseResults(_ json: [String: Any]?) -> [CourseSearchResult] {
         let courses = (json?["courses"] as? [[String: Any]]) ?? []
 
         return courses.compactMap { c in
@@ -119,7 +124,12 @@ final class CourseSearchService {
     private func fetchHoleGps(holeId: String, apiKey: String) async throws -> HoleGps? {
         let data = try await golfbertFetch("/holes/\(holeId)/gpsdata", apiKey: apiKey)
         let points = (data["gps_points"] as? [[String: Any]]) ?? []
+        return Self.parseHoleGpsPoints(points)
+    }
 
+    /// Parse raw GPS point dictionaries into hole GPS data. Internal + static
+    /// so tests can cover it.
+    static func parseHoleGpsPoints(_ points: [[String: Any]]) -> HoleGps? {
         var gps = HoleGps()
         var hazards: [HoleHazard] = []
 

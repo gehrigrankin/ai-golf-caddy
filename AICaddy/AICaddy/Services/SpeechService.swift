@@ -14,6 +14,9 @@ final class SpeechService {
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
 
+    private var pendingResult: ((String) -> Void)?
+    private var hasDelivered = false
+
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
@@ -45,6 +48,8 @@ final class SpeechService {
         recognitionRequest = request
         transcript = ""
         error = nil
+        pendingResult = onResult
+        hasDelivered = false
 
         let audioSession = AVAudioSession.sharedInstance()
         do {
@@ -83,7 +88,7 @@ final class SpeechService {
                 if taskResult.isFinal {
                     DispatchQueue.main.async {
                         self.stopListening()
-                        onResult(text)
+                        self.deliver(text)
                     }
                 }
             }
@@ -100,6 +105,15 @@ final class SpeechService {
         }
     }
 
+    /// User-initiated "I'm done talking" — stops the session and submits whatever
+    /// was transcribed so far. Without this, tapping stop cancels the recognition
+    /// task and the final-result callback (and the user's input) is silently lost.
+    func finishListening() {
+        let text = transcript
+        stopListening()
+        deliver(text)
+    }
+
     func stopListening() {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
@@ -108,5 +122,17 @@ final class SpeechService {
         recognitionRequest = nil
         recognitionTask = nil
         isListening = false
+    }
+
+    /// Deliver the result exactly once per listening session.
+    private func deliver(_ text: String) {
+        guard !hasDelivered else { return }
+        hasDelivered = true
+        let callback = pendingResult
+        pendingResult = nil
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        callback?(trimmed)
     }
 }

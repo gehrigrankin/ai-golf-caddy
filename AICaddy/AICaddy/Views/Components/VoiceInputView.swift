@@ -13,7 +13,9 @@ struct VoiceInputView: View {
             // Big mic button
             Button {
                 if speech.isListening {
-                    speech.stopListening()
+                    // Submit what was said — plain stopListening() would cancel
+                    // the recognition task and drop the user's input.
+                    speech.finishListening()
                 } else {
                     speech.startListening { result in
                         onResult(result)

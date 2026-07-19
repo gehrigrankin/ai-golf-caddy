@@ -4,6 +4,8 @@ import SwiftData
 struct HomeView: View {
     @Query(sort: \Round.date, order: .reverse) private var allRounds: [Round]
     @State private var showNewRound = false
+    /// When set, the round sheet resumes this round instead of starting fresh.
+    @State private var roundToResume: Round?
 
     let locationService: LocationService
     let speechService: SpeechService
@@ -72,7 +74,8 @@ struct HomeView: View {
                     speechService: speechService,
                     shotParser: shotParser,
                     courseSearch: courseSearch,
-                    clubRecommender: clubRecommender
+                    clubRecommender: clubRecommender,
+                    existingRound: roundToResume
                 )
             }
         }
@@ -125,14 +128,20 @@ struct HomeView: View {
         VStack(spacing: 12) {
             // Resume in-progress round
             if let inProgress = inProgressRound {
-                Button { showNewRound = true } label: {
+                Button {
+                    // Actually resume this round — without setting roundToResume
+                    // the sheet starts a brand-new round and the old one is lost.
+                    roundToResume = inProgress
+                    showNewRound = true
+                } label: {
                     HStack(spacing: 14) {
-                        // Hole progress ring
+                        // Hole progress ring (don't assume 18 holes)
+                        let holeCount = max(1, inProgress.holes.count)
                         ZStack {
                             Circle()
                                 .stroke(Color.white.opacity(0.08), lineWidth: 3)
                             Circle()
-                                .trim(from: 0, to: Double(inProgress.currentHole) / 18.0)
+                                .trim(from: 0, to: Double(inProgress.currentHole) / Double(holeCount))
                                 .stroke(Color.orange, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                             Text("\(inProgress.currentHole)")
@@ -144,7 +153,7 @@ struct HomeView: View {
                             Text(inProgress.courseName)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white)
-                            Text("Hole \(inProgress.currentHole) of 18 · \(inProgress.teeName)")
+                            Text("Hole \(inProgress.currentHole) of \(holeCount) · \(inProgress.teeName)")
                                 .font(.system(size: 12))
                                 .foregroundStyle(.white.opacity(0.5))
                         }
@@ -175,7 +184,10 @@ struct HomeView: View {
             }
 
             // Start new round button
-            Button { showNewRound = true } label: {
+            Button {
+                roundToResume = nil
+                showNewRound = true
+            } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .bold))

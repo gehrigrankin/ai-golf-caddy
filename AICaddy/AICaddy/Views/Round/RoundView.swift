@@ -10,6 +10,8 @@ struct RoundView: View {
     let shotParser: ShotParserService
     let courseSearch: CourseSearchService
     let clubRecommender: ClubRecommendationService
+    /// Resume an in-progress round instead of starting a new one.
+    var existingRound: Round? = nil
 
     @Query(sort: \Course.createdAt, order: .reverse) private var savedCourses: [Course]
     @Query(filter: #Predicate<Round> { $0.isComplete == true }, sort: \Round.date) private var completedRounds: [Round]
@@ -19,6 +21,10 @@ struct RoundView: View {
     @State private var activeCourse: Course?
     @State private var currentHole = 1
     @State private var showScorecard = false
+    /// Decoded once — Round.courseTee decodes JSON on every access, far too hot
+    /// for a body that re-evaluates on every GPS tick.
+    @State private var activeTee: CourseTee?
+    @State private var autoAdvance = AutoAdvanceService()
 
     enum Phase { case search, setup, play, summary }
 
@@ -62,8 +68,36 @@ struct RoundView: View {
                     .navigationTitle(activeCourse != nil ? "Select Tee" : "New Round")
 
                 case .play:
-                    if let round, let _ = currentHoleBinding {
+                    if let round, currentHoleScore != nil {
                         VStack(spacing: 0) {
+                            // Auto-advance suggestion banner
+                            if let suggested = autoAdvance.suggestedAdvance {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "figure.walk")
+                                        .foregroundStyle(.green)
+                                    Text("At hole \(suggested) tee box")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    Button("Advance") {
+                                        currentHole = suggested
+                                        autoAdvance.confirmAdvance()
+                                        HapticsService.holeAdvanced()
+                                    }
+                                    .font(.subheadline.bold())
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.green)
+                                    Button {
+                                        autoAdvance.dismissAdvance()
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 8)
+                                .background(Color.green.opacity(0.12))
+                            }
+
                             if showScorecard {
                                 ScrollView {
                                     VStack(spacing: 12) {
@@ -89,8 +123,9 @@ struct RoundView: View {
                                     userLocation: locationService.location,
                                     totalScore: round.holes.reduce(0) { $0 + $1.strokes },
                                     totalPar: round.holes.filter { $0.strokes > 0 }.reduce(0) { $0 + $1.par },
+                                    holesPlayed: round.holes.filter { $0.strokes > 0 }.count,
                                     onNext: {
-                                        if currentHole < 18 {
+                                        if currentHole < lastHoleNumber {
                                             currentHole += 1
                                         } else {
                                             finishRound()
@@ -100,7 +135,7 @@ struct RoundView: View {
                                         if currentHole > 1 { currentHole -= 1 }
                                     },
                                     isFirst: currentHole == 1,
-                                    isLast: currentHole == 18,
+                                    isLast: currentHole == lastHoleNumber,
                                     speech: speechService,
                                     shotParser: shotParser,
                                     clubRecommendation: currentClubRecommendation
@@ -164,12 +199,9 @@ struct RoundView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        if phase == .play {
-                            // Save progress before leaving
-                            dismiss()
-                        } else {
-                            dismiss()
-                        }
+                        // Progress is already persisted (round + currentHole);
+                        // the round shows up as resumable on the home screen.
+                        dismiss()
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
@@ -183,6 +215,13 @@ struct RoundView: View {
             locationService.startTracking()
             speechService.requestAuthorization()
             clubRecommender.loadHistory(rounds: completedRounds)
+            resumeIfNeeded()
+        }
+        .onChange(of: currentHole) { _, newValue in
+            round?.currentHole = newValue
+        }
+        .onChange(of: locationService.fixCount) {
+            checkAutoAdvance()
         }
         .onDisappear {
             locationService.stopTracking()
@@ -208,12 +247,23 @@ struct RoundView: View {
         )
     }
 
-    private var currentHoleBinding: HoleScore? {
+    private var currentHoleScore: HoleScore? {
         round?.holes.first { $0.holeNumber == currentHole }
     }
 
+    /// Highest hole number in this round — 9-hole courses exist, never assume 18.
+    private var lastHoleNumber: Int {
+        round?.holes.map(\.holeNumber).max() ?? 18
+    }
+
+    /// GPS for the current hole, from the tee that was actually played (stored
+    /// on the round itself so it survives app restarts / resume).
     private var currentHoleGps: HoleGps? {
-        activeCourse?.tees.first?.holes.first { $0.holeNumber == currentHole }?.gps
+        activeTee?.holes.first { $0.holeNumber == currentHole }?.gps
+    }
+
+    private var nextTeeGps: GpsPoint? {
+        activeTee?.holes.first { $0.holeNumber == currentHole + 1 }?.gps?.tee
     }
 
     /// Club recommendation based on GPS distance to green center
@@ -229,11 +279,27 @@ struct RoundView: View {
 
     // MARK: - Actions
 
+    private func resumeIfNeeded() {
+        guard round == nil, let existing = existingRound, !existing.isComplete else { return }
+        round = existing
+        activeTee = existing.courseTee
+        activeCourse = savedCourses.first { $0.id == existing.courseId }
+        let maxHole = existing.holes.map(\.holeNumber).max() ?? 18
+        currentHole = min(max(1, existing.currentHole), maxHole)
+        phase = .play
+    }
+
     private func startRound(course: Course, teeName: String) {
         guard let tee = course.tees.first(where: { $0.name == teeName }) ?? course.tees.first else { return }
 
-        let holes = tee.holes.map { h in
+        var holes = tee.holes.map { h in
             HoleScore(holeNumber: h.holeNumber, par: h.par, yardage: h.yardage)
+        }
+        // A course loaded from the API can come back with no hole data — a round
+        // with zero holes renders a permanently blank screen. Fall back to a
+        // standard 18 so the round is still playable.
+        if holes.isEmpty {
+            holes = (1...18).map { HoleScore(holeNumber: $0, par: 4) }
         }
 
         let newRound = Round(
@@ -246,12 +312,27 @@ struct RoundView: View {
 
         modelContext.insert(newRound)
         round = newRound
+        activeTee = tee
         currentHole = 1
         phase = .play
     }
 
     private func finishRound() {
+        round?.currentHole = currentHole
         round?.isComplete = true
+        HapticsService.roundComplete()
         phase = .summary
+    }
+
+    private func checkAutoAdvance() {
+        guard phase == .play, let loc = locationService.location, round != nil else { return }
+        let scored = (currentHoleScore?.strokes ?? 0) > 0
+        autoAdvance.checkForAdvance(
+            currentHole: currentHole,
+            userLocation: loc,
+            nextTeebox: nextTeeGps,
+            lastHole: lastHoleNumber,
+            hasScoredCurrentHole: scored
+        )
     }
 }

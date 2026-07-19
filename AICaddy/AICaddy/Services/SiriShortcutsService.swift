@@ -88,6 +88,10 @@ struct RoundStatusIntent: AppIntent {
 struct AICaddyShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         return [
+            // Note: String parameters aren't allowed inside App Shortcut phrases
+            // (only AppEntity/AppEnum are) — parameterized phrases here break the
+            // AppIntents metadata export and fail the whole build. Siri asks for
+            // the parameter as a follow-up instead.
             AppShortcut(
                 intent: StartRoundIntent(),
                 phrases: [

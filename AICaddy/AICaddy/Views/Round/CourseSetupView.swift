@@ -43,6 +43,9 @@ struct CourseSetupView: View {
             ForEach(existingCourses, id: \.id) { course in
                 Button {
                     selectedCourse = course
+                    // Sync the tee picker — the default "White" may not exist
+                    // on this course, which left the picker with no selection.
+                    teeName = course.tees.first?.name ?? "Default"
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {

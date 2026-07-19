@@ -8,6 +8,14 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     var heading: Double?
     var error: String?
     var isTracking = false
+    /// Incremented for every accepted fix — lets views observe location changes cheaply.
+    var fixCount = 0
+
+    /// Fixes worse than this (meters) are useless for club distances — reject them.
+    /// The first fix after startTracking is often a cell-tower fix with ~1000m accuracy.
+    static let maxAcceptableAccuracyMeters: Double = 50
+    /// Fixes older than this are stale (e.g. a cached fix replayed on start).
+    static let maxFixAgeSeconds: TimeInterval = 15
 
     private let manager = CLLocationManager()
 
@@ -54,12 +62,29 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         return Int(2 * R * asin(sqrt(h)))
     }
 
+    // MARK: - Fix filtering
+
+    /// Filter and apply a raw location fix. Internal so tests can drive it directly.
+    /// Returns true if the fix was accepted.
+    @discardableResult
+    func ingest(_ fix: CLLocation, now: Date = Date()) -> Bool {
+        guard fix.horizontalAccuracy >= 0,  // negative accuracy = invalid fix
+              fix.horizontalAccuracy <= Self.maxAcceptableAccuracyMeters,
+              now.timeIntervalSince(fix.timestamp) <= Self.maxFixAgeSeconds
+        else { return false }
+
+        location = fix.coordinate
+        accuracy = fix.horizontalAccuracy
+        fixCount += 1
+        return true
+    }
+
     // MARK: - CLLocationManagerDelegate
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let loc = locations.last else { return }
-        location = loc.coordinate
-        accuracy = loc.horizontalAccuracy
+        for loc in locations {
+            ingest(loc)
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

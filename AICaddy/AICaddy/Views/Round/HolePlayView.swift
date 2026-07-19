@@ -7,6 +7,9 @@ struct HolePlayView: View {
     let userLocation: CLLocationCoordinate2D?
     let totalScore: Int
     let totalPar: Int
+    /// Count of holes with a recorded score — "thru N" must not assume holes
+    /// were played in order.
+    let holesPlayed: Int
     let onNext: () -> Void
     let onPrev: () -> Void
     let isFirst: Bool
@@ -21,7 +24,6 @@ struct HolePlayView: View {
     var clubRecommendation: ClubRecommendation?
 
     private var runningToPar: Int { totalScore - totalPar }
-    private var holesPlayed: Int { hole.holeNumber - 1 }
 
     var body: some View {
         ScrollView {
@@ -288,7 +290,7 @@ struct HolePlayView: View {
         hole.shots = []
         hole.strokes = 0
         hole.putts = nil
-        hole.fairwayHit = hole.par >= 4 ? nil : nil
+        hole.fairwayHit = nil
         hole.greenInRegulation = nil
         hole.upAndDown = nil
         hole.sandSave = nil
@@ -309,28 +311,8 @@ struct HolePlayView: View {
             )
 
             await MainActor.run {
-                if let strokes = parsed.totalStrokes {
-                    hole.strokes = strokes
-                    lastParse = "Score: \(strokes)"
-                }
-
-                if !parsed.shots.isEmpty {
-                    hole.shots.append(contentsOf: parsed.shots)
-                    if parsed.totalStrokes == nil {
-                        hole.strokes = hole.shots.count
-                    }
-                    let desc = parsed.shots.map { s in
-                        [s.club?.displayName, s.distanceYards.map { "\($0)y" }, s.result?.displayName]
-                            .compactMap { $0 }.joined(separator: " ")
-                    }.joined(separator: ", ")
-                    lastParse = desc.isEmpty ? "shots added" : desc
-                }
-
-                if let putts = parsed.putts { hole.putts = putts }
-                if let fir = parsed.fairwayHit { hole.fairwayHit = fir }
-                if let gir = parsed.greenInRegulation { hole.greenInRegulation = gir }
-
-                StatsCalculator.deriveHoleStats(&hole)
+                lastParse = HoleScoreUpdater.apply(parsed, to: &hole)
+                HapticsService.scoreEntered()
                 parsing = false
             }
         }

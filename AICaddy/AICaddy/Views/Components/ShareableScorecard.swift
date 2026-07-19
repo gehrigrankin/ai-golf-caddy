@@ -6,6 +6,11 @@ struct ShareableScorecard: View {
     let round: Round
     let stats: RoundStats
 
+    // Don't assume 18 holes — on a 9-hole round, `suffix(9)` would duplicate
+    // the front nine as the back nine.
+    private var front: [HoleScore] { Array(round.holes.prefix(9)) }
+    private var back: [HoleScore] { round.holes.count > 9 ? Array(round.holes.dropFirst(9)) : [] }
+
     var body: some View {
         VStack(spacing: 12) {
             // Header
@@ -35,28 +40,30 @@ struct ShareableScorecard: View {
             // Score grid
             VStack(spacing: 6) {
                 // Front 9
-                ScoreRow(label: "Hole", values: (1...9).map { "\($0)" }, total: "Out")
-                ScoreRow(label: "Par", values: round.holes.prefix(9).map { "\($0.par)" },
-                         total: "\(round.holes.prefix(9).reduce(0) { $0 + $1.par })")
+                ScoreRow(label: "Hole", values: front.map { "\($0.holeNumber)" }, total: "Out")
+                ScoreRow(label: "Par", values: front.map { "\($0.par)" },
+                         total: "\(front.reduce(0) { $0 + $1.par })")
                 ScoreRow(label: "Score",
-                         values: round.holes.prefix(9).map { $0.strokes > 0 ? "\($0.strokes)" : "-" },
-                         total: "\(round.holes.prefix(9).reduce(0) { $0 + $1.strokes })",
-                         pars: round.holes.prefix(9).map { $0.par },
-                         scores: round.holes.prefix(9).map { $0.strokes },
+                         values: front.map { $0.strokes > 0 ? "\($0.strokes)" : "-" },
+                         total: "\(front.reduce(0) { $0 + $1.strokes })",
+                         pars: front.map { $0.par },
+                         scores: front.map { $0.strokes },
                          isBold: true)
 
-                Divider().padding(.vertical, 2)
+                if !back.isEmpty {
+                    Divider().padding(.vertical, 2)
 
-                // Back 9
-                ScoreRow(label: "Hole", values: (10...18).map { "\($0)" }, total: "In")
-                ScoreRow(label: "Par", values: round.holes.suffix(9).map { "\($0.par)" },
-                         total: "\(round.holes.suffix(9).reduce(0) { $0 + $1.par })")
-                ScoreRow(label: "Score",
-                         values: round.holes.suffix(9).map { $0.strokes > 0 ? "\($0.strokes)" : "-" },
-                         total: "\(round.holes.suffix(9).reduce(0) { $0 + $1.strokes })",
-                         pars: round.holes.suffix(9).map { $0.par },
-                         scores: round.holes.suffix(9).map { $0.strokes },
-                         isBold: true)
+                    // Back 9
+                    ScoreRow(label: "Hole", values: back.map { "\($0.holeNumber)" }, total: "In")
+                    ScoreRow(label: "Par", values: back.map { "\($0.par)" },
+                             total: "\(back.reduce(0) { $0 + $1.par })")
+                    ScoreRow(label: "Score",
+                             values: back.map { $0.strokes > 0 ? "\($0.strokes)" : "-" },
+                             total: "\(back.reduce(0) { $0 + $1.strokes })",
+                             pars: back.map { $0.par },
+                             scores: back.map { $0.strokes },
+                             isBold: true)
+                }
             }
 
             Divider()
