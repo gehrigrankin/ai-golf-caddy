@@ -215,60 +215,6 @@ struct AICaddyServiceTests {
     }
 }
 
-@Suite("Course search parsing")
-struct CourseSearchParsingTests {
-
-    @Test func parsesCourseList() {
-        let json: [String: Any] = ["courses": [
-            ["id": 123, "name": "Papago Golf Course", "city": "Phoenix", "state": "AZ",
-             "latitude": 33.4530, "longitude": -111.9528],
-            ["id": "abc", "name": "Encanto", "region": "Arizona"],
-            ["name": "No ID — must be dropped"],
-        ]]
-        let results = CourseSearchService.parseCourseResults(json)
-        #expect(results.count == 2)
-        #expect(results[0].id == "123")
-        #expect(results[0].name == "Papago Golf Course")
-        #expect(results[0].location != nil)
-        #expect(results[1].id == "abc")
-        #expect(results[1].state == "Arizona")  // region fallback
-        #expect(results[1].location == nil)
-    }
-
-    @Test func emptyAndMalformedLists() {
-        #expect(CourseSearchService.parseCourseResults(nil).isEmpty)
-        #expect(CourseSearchService.parseCourseResults([:]).isEmpty)
-        #expect(CourseSearchService.parseCourseResults(["courses": "not an array"]).isEmpty)
-    }
-
-    @Test func parsesHoleGps() {
-        let points: [[String: Any]] = [
-            ["type": "Teebox", "latitude": 33.001, "longitude": -112.001],
-            ["type": "Green Center", "latitude": 33.002, "longitude": -112.002],
-            ["type": "Green Front", "latitude": 33.0015, "longitude": -112.0015],
-            ["type": "Greenside Bunker", "latitude": 33.0018, "longitude": -112.0018, "label": "Left bunker"],
-            ["type": "Water Hazard", "lat": 33.0012, "lng": -112.0012],
-        ]
-        let gps = CourseSearchService.parseHoleGpsPoints(points)
-        #expect(gps != nil)
-        #expect(gps?.tee?.lat == 33.001)
-        #expect(gps?.greenCenter?.lat == 33.002)
-        #expect(gps?.greenFront != nil)
-        #expect(gps?.hazards?.count == 2)
-        #expect(gps?.hazards?.first?.type == "bunker")
-        #expect(gps?.hazards?.last?.type == "water")
-    }
-
-    @Test func noUsefulPointsMeansNil() {
-        #expect(CourseSearchService.parseHoleGpsPoints([]) == nil)
-        // Points without coordinates are skipped
-        #expect(CourseSearchService.parseHoleGpsPoints([["type": "Teebox"]]) == nil)
-        // Only hazards, no tee/green → still nil (useless for the map)
-        let onlyHazard: [[String: Any]] = [["type": "bunker", "latitude": 33.0, "longitude": -112.0]]
-        #expect(CourseSearchService.parseHoleGpsPoints(onlyHazard) == nil)
-    }
-}
-
 @Suite("Export service")
 struct ExportServiceTests {
 

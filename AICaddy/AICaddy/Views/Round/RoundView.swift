@@ -8,7 +8,6 @@ struct RoundView: View {
     let locationService: LocationService
     let speechService: SpeechService
     let shotParser: ShotParserService
-    let courseSearch: CourseSearchService
     let clubRecommender: ClubRecommendationService
     /// Resume an in-progress round instead of starting a new one.
     var existingRound: Round? = nil
@@ -34,7 +33,6 @@ struct RoundView: View {
                 switch phase {
                 case .search:
                     CourseSearchView(
-                        courseSearch: courseSearch,
                         locationService: locationService,
                         onCourseLoaded: { course in
                             modelContext.insert(course)

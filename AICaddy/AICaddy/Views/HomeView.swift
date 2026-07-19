@@ -10,7 +10,6 @@ struct HomeView: View {
     let locationService: LocationService
     let speechService: SpeechService
     let shotParser: ShotParserService
-    let courseSearch: CourseSearchService
     let clubRecommender: ClubRecommendationService
 
     private var inProgressRound: Round? {
@@ -73,7 +72,6 @@ struct HomeView: View {
                     locationService: locationService,
                     speechService: speechService,
                     shotParser: shotParser,
-                    courseSearch: courseSearch,
                     clubRecommender: clubRecommender,
                     existingRound: roundToResume
                 )

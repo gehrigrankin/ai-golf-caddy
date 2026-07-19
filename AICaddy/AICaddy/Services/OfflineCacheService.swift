@@ -1,15 +1,12 @@
 import Foundation
 import SwiftData
 
-/// Pre-downloads course GPS data for offline use on the course
+/// Stores loaded course GPS data locally for offline use on the course
 @Observable
 final class OfflineCacheService {
     var cachedCourses: [String] = []  // course IDs
-    var isDownloading = false
-    var downloadProgress: Double = 0
     var error: String?
 
-    private let courseSearch = CourseSearchService()
     private let cacheDir: URL
 
     init() {
@@ -19,52 +16,29 @@ final class OfflineCacheService {
         loadCachedList()
     }
 
-    /// Download full course data for offline use
-    func downloadCourse(id: String) async {
-        guard courseSearch.isConfigured else {
-            error = "Course API not configured"
-            return
-        }
-
-        await MainActor.run {
-            isDownloading = true
-            downloadProgress = 0
-            error = nil
-        }
+    /// Save an already-loaded course (e.g. from OSM search) for offline use.
+    func cache(course: Course) {
+        let cacheData = CachedCourse(
+            id: course.id,
+            name: course.name,
+            city: course.city,
+            state: course.state,
+            location: course.location,
+            tees: course.tees,
+            downloadedAt: Date()
+        )
 
         do {
-            let details = try await courseSearch.fetchCourseDetails(id: id)
-
-            await MainActor.run { downloadProgress = 0.5 }
-
-            // Serialize to JSON and save
-            let cacheData = CachedCourse(
-                id: id,
-                name: details.name,
-                city: details.city,
-                state: details.state,
-                location: details.location,
-                tees: details.tees,
-                downloadedAt: Date()
-            )
-
             let data = try JSONEncoder().encode(cacheData)
-            let fileURL = cacheDir.appendingPathComponent("\(id).json")
+            let fileURL = cacheDir.appendingPathComponent("\(course.id).json")
             try data.write(to: fileURL)
-
-            await MainActor.run {
-                downloadProgress = 1.0
-                isDownloading = false
-                if !cachedCourses.contains(id) {
-                    cachedCourses.append(id)
-                }
-                saveCachedList()
+            if !cachedCourses.contains(course.id) {
+                cachedCourses.append(course.id)
             }
-        } catch let downloadError {
-            await MainActor.run {
-                self.error = "Download failed: \(downloadError.localizedDescription)"
-                isDownloading = false
-            }
+            saveCachedList()
+            error = nil
+        } catch {
+            self.error = "Caching failed: \(error.localizedDescription)"
         }
     }
 

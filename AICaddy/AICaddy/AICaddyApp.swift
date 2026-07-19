@@ -8,7 +8,6 @@ struct AICaddyApp: App {
     @State private var clubRecommender = ClubRecommendationService()
 
     private let shotParser = ShotParserService()
-    private let courseSearch = CourseSearchService()
 
     var body: some Scene {
         WindowGroup {
@@ -16,7 +15,6 @@ struct AICaddyApp: App {
                 locationService: locationService,
                 speechService: speechService,
                 shotParser: shotParser,
-                courseSearch: courseSearch,
                 clubRecommender: clubRecommender
             )
             .preferredColorScheme(.dark)
