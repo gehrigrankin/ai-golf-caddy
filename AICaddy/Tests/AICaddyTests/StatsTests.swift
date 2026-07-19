@@ -290,6 +290,81 @@ struct HoleScoreUpdaterTests {
         #expect(hole.greenInRegulation == false)
         #expect(hole.sandSave == false)
     }
+
+    // MARK: - Escape hatches (undo / remove shot / reset)
+
+    @Test("Removing a mis-parsed shot renumbers and fixes the score")
+    func removeShotRecovers() {
+        var hole = HoleScore(holeNumber: 1, par: 4)
+        apply("driver 250 fairway", to: &hole)
+        apply("8 iron 155 on the green", to: &hole)
+        // The parser heard the same shot twice — classic on-course mis-parse
+        apply("8 iron 155 on the green", to: &hole)
+        apply("2 putts", to: &hole)
+        #expect(hole.strokes == 5)  // one stroke too many
+
+        let duplicate = hole.shots[2]
+        HoleScoreUpdater.removeShot(id: duplicate.id, from: &hole)
+
+        #expect(hole.strokes == 4)
+        #expect(hole.shots.count == 2)
+        #expect(hole.shots.map(\.shotNumber) == [1, 2])
+        #expect(hole.putts == 2)
+    }
+
+    @Test func removePenaltyShotDropsPenaltyStroke() {
+        var hole = HoleScore(holeNumber: 1, par: 4)
+        apply("driver in the water", to: &hole)
+        #expect(hole.strokes == 2)  // swing + penalty
+
+        HoleScoreUpdater.removeShot(id: hole.shots[0].id, from: &hole)
+        #expect(hole.strokes == 0)
+        #expect(hole.shots.isEmpty)
+    }
+
+    @Test func removingNonexistentShotIsHarmless() {
+        var hole = HoleScore(holeNumber: 1, par: 4)
+        apply("driver 250 fairway", to: &hole)
+        HoleScoreUpdater.removeShot(id: UUID(), from: &hole)
+        #expect(hole.shots.count == 1)
+        #expect(hole.strokes == 1)
+    }
+
+    @Test("Reset wipes the hole completely — even without logged shots")
+    func resetClearsEverything() {
+        var hole = HoleScore(holeNumber: 1, par: 4)
+        // Quick-score path: no shots logged, so the old shots-gated Clear
+        // button would never have appeared
+        apply("bogey 2 putts", to: &hole)
+        hole.fairwayHit = false
+        #expect(hole.strokes == 5)
+
+        HoleScoreUpdater.reset(&hole)
+        #expect(hole.strokes == 0)
+        #expect(hole.putts == nil)
+        #expect(hole.fairwayHit == nil)
+        #expect(hole.greenInRegulation == nil)
+        #expect(hole.upAndDown == nil)
+        #expect(hole.sandSave == nil)
+        #expect(hole.shots.isEmpty)
+        #expect(hole.scoreToPar == nil)  // reads as unplayed everywhere
+    }
+
+    @Test("Undo pattern: a snapshot restores the exact pre-input state")
+    func snapshotRestoresState() {
+        var hole = HoleScore(holeNumber: 1, par: 4)
+        apply("driver 250 fairway", to: &hole)
+        apply("8 iron 155 on the green", to: &hole)
+        let snapshot = hole  // what HolePlayView stores before each input
+
+        apply("triple bogey", to: &hole)  // garbage input wrecks the hole
+        #expect(hole.strokes == 7)
+
+        hole = snapshot  // undo
+        #expect(hole.strokes == 2)
+        #expect(hole.shots.count == 2)
+        #expect(hole.greenInRegulation == true)
+    }
 }
 
 @Suite("Handicap calculator")

@@ -18,6 +18,10 @@ struct HolePlayView: View {
     @State private var parsing = false
     @State private var lastParse = ""
     @State private var showMap = true
+    /// Snapshots taken before each applied input so any mis-parse is one tap
+    /// from being undone. One bad hole must never ruin a round.
+    @State private var undoStack: [HoleScore] = []
+    @State private var showResetConfirm = false
 
     @Bindable var speech: SpeechService
     let shotParser: ShotParserService
@@ -177,10 +181,25 @@ struct HolePlayView: View {
                         .font(.subheadline)
                         .foregroundStyle(.green)
                 }
-                if !lastParse.isEmpty && !parsing {
-                    Text("Recorded: \(lastParse)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if (!lastParse.isEmpty || !undoStack.isEmpty) && !parsing {
+                    HStack {
+                        if !lastParse.isEmpty {
+                            Text("Recorded: \(lastParse)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if !undoStack.isEmpty {
+                            Button {
+                                hole = undoStack.removeLast()
+                                lastParse = ""
+                            } label: {
+                                Label("Undo", systemImage: "arrow.uturn.backward")
+                                    .font(.caption.bold())
+                            }
+                            .foregroundStyle(.orange)
+                        }
+                    }
                 }
 
                 // Shot log
@@ -189,8 +208,6 @@ struct HolePlayView: View {
                         HStack {
                             Text("Shot Log").font(.subheadline.bold()).foregroundStyle(.secondary)
                             Spacer()
-                            Button("Clear") { clearShots() }
-                                .font(.caption).foregroundStyle(.red)
                         }
                         ForEach(hole.shots) { shot in
                             HStack(spacing: 8) {
@@ -221,6 +238,16 @@ struct HolePlayView: View {
                                         .foregroundStyle(.blue)
                                 }
                                 Spacer()
+                                // Delete just this shot (mis-parsed voice input)
+                                Button {
+                                    snapshotForUndo()
+                                    HoleScoreUpdater.removeShot(id: shot.id, from: &hole)
+                                    lastParse = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary.opacity(0.6))
+                                }
                             }
                         }
                     }
@@ -252,9 +279,41 @@ struct HolePlayView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
                 }
+
+                // Always-available escape hatch: wipe this hole and start it
+                // over. Previously buried inside the shot log, so quick-score
+                // entries had no way back to a clean slate.
+                Button {
+                    showResetConfirm = true
+                } label: {
+                    Text("Reset Hole")
+                        .font(.caption)
+                        .foregroundStyle(.red.opacity(0.8))
+                }
+                .padding(.top, 4)
+                .confirmationDialog(
+                    "Reset hole \(hole.holeNumber)?",
+                    isPresented: $showResetConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Reset Hole", role: .destructive) {
+                        snapshotForUndo()
+                        HoleScoreUpdater.reset(&hole)
+                        lastParse = ""
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Clears the score, putts and shots for this hole only. Undo is available after.")
+                }
             }
             .padding(.horizontal)
             .padding(.bottom, 20)
+        }
+        .onChange(of: hole.holeNumber) {
+            // The view is reused across holes — a stale undo stack from another
+            // hole must never restore onto this one.
+            undoStack = []
+            lastParse = ""
         }
     }
 
@@ -286,18 +345,13 @@ struct HolePlayView: View {
         }
     }
 
-    private func clearShots() {
-        hole.shots = []
-        hole.strokes = 0
-        hole.putts = nil
-        hole.fairwayHit = nil
-        hole.greenInRegulation = nil
-        hole.upAndDown = nil
-        hole.sandSave = nil
-        lastParse = ""
+    private func snapshotForUndo() {
+        undoStack.append(hole)
+        if undoStack.count > 10 { undoStack.removeFirst() }
     }
 
     private func handleInput(_ input: String) {
+        snapshotForUndo()
         parsing = true
         lastParse = ""
 

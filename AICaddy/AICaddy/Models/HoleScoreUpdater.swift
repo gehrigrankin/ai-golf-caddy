@@ -37,6 +37,35 @@ enum HoleScoreUpdater {
         return summary
     }
 
+    /// Remove a single shot (e.g. a mis-parsed voice input), renumber the rest,
+    /// and recompute the score from what remains. Manually-set flags stay
+    /// untouched — this is surgical removal, not a reset.
+    static func removeShot(id: UUID, from hole: inout HoleScore) {
+        hole.shots.removeAll { $0.id == id }
+        renumberShots(&hole)
+
+        let nonPuttSwings = hole.shots.filter { !$0.isPutt }.count
+        let puttSwings = hole.shots.filter { $0.isPutt }.count
+        let penaltyStrokes = hole.shots.filter { $0.isPenalty }.count
+        let putts = max(puttSwings, hole.putts ?? 0)
+        hole.strokes = nonPuttSwings + putts + penaltyStrokes
+
+        StatsCalculator.deriveHoleStats(&hole)
+    }
+
+    /// Wipe the hole back to unplayed — the escape hatch when parsing or GPS
+    /// went sideways and the user wants a clean slate on this hole.
+    static func reset(_ hole: inout HoleScore) {
+        hole.shots = []
+        hole.strokes = 0
+        hole.putts = nil
+        hole.fairwayHit = nil
+        hole.greenInRegulation = nil
+        hole.upAndDown = nil
+        hole.sandSave = nil
+        hole.notes = nil
+    }
+
     /// Keep shot numbers sequential after appending parsed shots.
     private static func renumberShots(_ hole: inout HoleScore) {
         for i in hole.shots.indices {

@@ -134,6 +134,31 @@ struct ModelTests {
         #expect(inProgress[0].courseName == "Active")
     }
 
+    @Test("Discarding a broken in-progress round removes it for good")
+    func discardInProgressRound() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let broken = Round(courseId: "c1", courseName: "Broken", teeName: "W",
+                           holes: (1...18).map { makeHole($0, par: 4, strokes: 0) })
+        let done = Round(courseId: "c2", courseName: "Done", teeName: "W",
+                         holes: (1...18).map { makeHole($0, par: 4, strokes: 4) })
+        done.isComplete = true
+        context.insert(broken)
+        context.insert(done)
+        try context.save()
+
+        // What the Discard Round button does
+        context.delete(broken)
+        try context.save()
+
+        let inProgress = try context.fetch(FetchDescriptor<Round>(predicate: #Predicate { !$0.isComplete }))
+        #expect(inProgress.isEmpty)  // home screen card is gone
+        let remaining = try context.fetch(FetchDescriptor<Round>())
+        #expect(remaining.count == 1)  // completed history untouched
+        #expect(remaining[0].courseName == "Done")
+    }
+
     @Test func cachedCourseCodable() throws {
         let cached = CachedCourse(
             id: "42", name: "Papago", city: "Phoenix", state: "AZ",

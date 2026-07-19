@@ -2,10 +2,12 @@ import SwiftUI
 import SwiftData
 
 struct HomeView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Round.date, order: .reverse) private var allRounds: [Round]
     @State private var showNewRound = false
     /// When set, the round sheet resumes this round instead of starting fresh.
     @State private var roundToResume: Round?
+    @State private var showDiscardConfirm = false
 
     let locationService: LocationService
     let speechService: SpeechService
@@ -178,6 +180,27 @@ struct HomeView: View {
                                     .stroke(Color.orange.opacity(0.3), lineWidth: 1)
                             )
                     )
+                }
+                // Escape hatch: a broken round must be discardable without
+                // ever having to open it.
+                .contextMenu {
+                    Button(role: .destructive) {
+                        showDiscardConfirm = true
+                    } label: {
+                        Label("Discard Round", systemImage: "trash")
+                    }
+                }
+                .confirmationDialog(
+                    "Discard this round?",
+                    isPresented: $showDiscardConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Discard Round", role: .destructive) {
+                        modelContext.delete(inProgress)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("All scores from \(inProgress.courseName) will be deleted. This can't be undone.")
                 }
             }
 

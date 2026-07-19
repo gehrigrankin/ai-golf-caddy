@@ -24,6 +24,7 @@ struct RoundView: View {
     /// for a body that re-evaluates on every GPS tick.
     @State private var activeTee: CourseTee?
     @State private var autoAdvance = AutoAdvanceService()
+    @State private var showDiscardConfirm = false
 
     enum Phase { case search, setup, play, summary }
 
@@ -66,6 +67,38 @@ struct RoundView: View {
                     .navigationTitle(activeCourse != nil ? "Select Tee" : "New Round")
 
                 case .play:
+                    if let round, currentHoleScore == nil {
+                        // Recovery screen — never strand the user on a blank
+                        // view if the current hole doesn't exist in this round
+                        // (bad course data, weird resume state, whatever).
+                        VStack(spacing: 16) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.largeTitle)
+                                .foregroundStyle(.orange)
+                            Text("Hole \(currentHole) isn't in this round")
+                                .font(.headline)
+                            Text("The course data may be incomplete. Jump back to a hole that exists, or discard the round.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                            Button {
+                                currentHole = round.holes.map(\.holeNumber).min() ?? 1
+                            } label: {
+                                Text("Go to Hole \(round.holes.map(\.holeNumber).min() ?? 1)")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                    .background(Color.green)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            Button("Discard Round", role: .destructive) {
+                                showDiscardConfirm = true
+                            }
+                            .font(.subheadline)
+                        }
+                        .padding(24)
+                    }
                     if let round, currentHoleScore != nil {
                         VStack(spacing: 0) {
                             // Auto-advance suggestion banner
@@ -207,6 +240,29 @@ struct RoundView: View {
                         }
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if round != nil {
+                        Menu {
+                            Button(role: .destructive) {
+                                showDiscardConfirm = true
+                            } label: {
+                                Label("Discard Round", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Discard this round?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Round", role: .destructive) { discardRound() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("All scores from this round will be deleted. This can't be undone.")
             }
         }
         .onAppear {
@@ -320,6 +376,16 @@ struct RoundView: View {
         round?.isComplete = true
         HapticsService.roundComplete()
         phase = .summary
+    }
+
+    /// Escape hatch: a corrupted round must never haunt the user — delete it
+    /// entirely and go home.
+    private func discardRound() {
+        if let round {
+            modelContext.delete(round)
+        }
+        round = nil
+        dismiss()
     }
 
     private func checkAutoAdvance() {
